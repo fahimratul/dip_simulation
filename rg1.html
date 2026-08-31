@@ -55,14 +55,21 @@
   .gridwrap{overflow-x:auto}
   #grid{display:grid;gap:4px;grid-template-columns:repeat(var(--cols),minmax(36px,1fr));min-width:310px}
   .cell{position:relative;aspect-ratio:1/1;border-radius:6px;border:1.5px solid #ddd7c6;background:#fffdf6;
-    color:#3c4652;font-family:ui-monospace,Menlo,monospace;font-size:clamp(14px,3.4vw,20px);font-weight:600;
-    display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background .12s,border-color .12s}
-  .cell .coord{position:absolute;top:2px;left:4px;font-size:9px;font-weight:500;color:var(--muted);opacity:.5}
-  .cell .tag{position:absolute;bottom:1px;right:4px;font-size:10px;font-weight:700;opacity:.8}
+    color:#3c4652;transition:background .12s,border-color .12s}
+  .cell .coord{position:absolute;top:2px;left:4px;font-size:9px;font-weight:500;color:var(--muted);opacity:.5;pointer-events:none;z-index:1}
+  .cell .tag{position:absolute;bottom:1px;right:4px;font-size:10px;font-weight:700;opacity:.8;pointer-events:none;z-index:1}
+  .cellval{
+    position:absolute;inset:0;width:100%;height:100%;border:0;background:transparent;
+    color:inherit;font-family:ui-monospace,Menlo,monospace;font-size:clamp(14px,3.4vw,20px);font-weight:600;
+    text-align:center;border-radius:6px;padding:0;
+  }
+  .cellval::-webkit-outer-spin-button,.cellval::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+  .cellval{-moz-appearance:textfield}
+  .cellval:focus{outline:3px solid #2f6fd0;outline-offset:-2px}
   .cell.seedmark::after{content:"";position:absolute;top:3px;right:3px;width:6px;height:6px;border-radius:50%;
-    background:#16202b;opacity:.45}
+    background:#16202b;opacity:.45;pointer-events:none;z-index:1}
   .cell.scan{border-color:#111a24;border-width:3px}
-  .cell.test{border-style:dashed;border-width:3px;border-color:#d2079c}
+  .cell.test{border-style:dashed;border-width:3px;border-color:#111a24}
   .cell.rejected{background:var(--reject-soft)!important;border-color:var(--reject)!important;color:#8a2118}
 
   .legend{display:flex;flex-wrap:wrap;gap:8px 16px;margin-top:12px;font-size:12.5px;color:#4a5561}
@@ -111,18 +118,30 @@
 <div class="wrap">
 <header>
   <h1>Region growing across a raster scan</h1>
-  <h2>It is not hundred percent accurate</h2>
-  <p>The scan walks the 8×8 image one pixel at a time, left to right and then down to the next row. What happens at each pixel depends on what it is:</p>
+  <p>The 8×8 image is scanned left to right, then row by row, to find the next pixel to look at:</p>
   <ol class="rules">
+    <li>Already had its own neighbours tested — nothing new here, move on.</li>
     <li>Not a seed and not yet in a region — nothing to do, move on.</li>
     <li>A seed with no region yet — start a new region here, then test its neighbours.</li>
-    <li>Already inside a region (seed or not) — test its neighbours and grow that region.</li>
+    <li>Already in a region, but not yet tested itself — test its neighbours now, to keep the region growing.</li>
   </ol>
-  <p style="margin-top:10px">A neighbour is taken in only if it is still free and the region's max − min stays within the threshold after adding it. A pixel turned down by one region can still be picked up by another one later.</p>
+  <p style="margin-top:10px">A neighbour is accepted only if it is still unclaimed and the region's max − min stays within the threshold after adding it. Accepted neighbours that are still ahead of the scan simply wait for their own turn. But a neighbour the scan has already passed — up or left of the current pixel — would never get a turn of its own, so it is tested immediately instead. A pixel turned down by one region can still be picked up by a different region later in the scan.</p>
   <div class="rule"></div>
 </header>
 
 <div class="panel controls">
+  <div class="field">
+    <label for="rowsIn">Rows</label>
+    <input type="number" id="rowsIn" min="1" max="20" value="8" style="width:64px">
+  </div>
+  <div class="field">
+    <label for="colsIn">Columns</label>
+    <input type="number" id="colsIn" min="1" max="20" value="8" style="width:64px">
+  </div>
+  <div class="field">
+    <label>&nbsp;</label>
+    <button id="resize">Resize grid</button>
+  </div>
   <div class="field">
     <label for="seedVal">Seed value</label>
     <input type="number" id="seedVal" value="6" style="width:74px">
@@ -137,10 +156,6 @@
       <option value="4" selected>4-connected</option>
       <option value="8">8-connected</option>
     </select>
-  </div>
-  <div class="field check">
-    <input type="checkbox" id="multi">
-    <label for="multi">Repeat the scan until nothing changes</label>
   </div>
 </div>
 
@@ -160,12 +175,13 @@
   <div>
     <div class="gridwrap"><div id="grid"></div></div>
     <div class="legend">
-      <span><i class="sw scan"></i>scan is here</span>
+      <span><i class="sw scan"></i>scan position</span>
       <span><i class="sw test"></i>neighbour being tested</span>
       <span><i class="sw rej"></i>turned down</span>
       <span><i class="sw sd"></i>seed value</span>
       <span>colour = region</span>
     </div>
+    <p class="note">Click any cell to type a new value for it. Double-click a cell to set its value as the seed.</p>
   </div>
 
   <div>
@@ -186,7 +202,7 @@
   <p class="note">One row per line, values separated by spaces. Any grid size works.</p>
 </details>
 
-<p class="note" style="margin-top:22px">A single pass leaves a gap worth noticing: a pixel that is absorbed into a region after the scan has already passed it never gets a turn to grow from. Tick “repeat the scan” to keep scanning until the picture stops changing.</p>
+<p class="note" style="margin-top:22px">A pixel like (0,0) is skipped when the scan first reaches it — it isn't a seed and has no region yet. Moments later, region A's own neighbour test claims it anyway. Since the scan can never go back to (0,0) for its own turn, (0,0) is expanded on the spot, which is how (1,0) ends up already inside region A by the time the scan reaches it — exactly as it should.</p>
 </div>
 
 <script>
@@ -204,7 +220,7 @@ const ORIGINAL = [
 ];
 
 const PALETTE = [
-  ["#fdf0c4","#00ff88","#6b4a00"],
+  ["#fdf0c4","#d99b00","#6b4a00"],
   ["#dbe7fb","#2f6fd0","#123a6e"],
   ["#d8f0e4","#17916a","#0d5340"],
   ["#f3ddf3","#a13fa1","#5f1f5f"],
@@ -231,12 +247,12 @@ function build(){
   const seedVal = +$("seedVal").value;
   const T = +$("thr").value;
   const conn = +$("conn").value;
-  const repeat = $("multi").checked;
   const offs = conn === 4
     ? [[-1,0],[0,-1],[0,1],[1,0]]
     : [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
 
   const owner = new Array(R*C).fill(-1);
+  const expanded = new Array(R*C).fill(false);
   const regions = [];
   const out = [];
 
@@ -246,76 +262,85 @@ function build(){
     scan:-1, test:-1, active:-1, kind:"", seedVal
   }, o));
 
-  snap({kind:"start", text:`The scan starts at (0,0). Seed value is <b>${seedVal}</b>, threshold is <b>${T}</b>, so any region must keep max − min ≤ ${T}.`});
+  snap({kind:"start", text:`The scan starts at (0,0) and moves left to right, then row by row. At each pixel: if it already belongs to a region, or is a seed with no region yet, its neighbours get tested — but only the neighbours the scan hasn't reached yet actually wait for their own turn. A neighbour the scan has already passed (up or left) is tested right away instead, since it would otherwise never get a turn of its own.`});
 
-  let pass = 0, changed = true, guard = 0;
-  while(changed && guard++ < 60){
-    changed = false; pass++;
-    if(repeat) snap({kind:"pass", text:`Pass ${pass} starts again at (0,0).`});
+  let outerIdx = -1;
 
-    for(let i = 0; i < R*C; i++){
-      const r = rowOf(i), c = colOf(i), v = G[r][c];
-      let k = owner[i];
+  // Test the neighbours of pixel p (which belongs to region k). Any accepted
+  // neighbour whose index is still ahead of the scan (outerIdx) is left for
+  // its own natural turn; any accepted neighbour already behind the scan
+  // (outerIdx) is tested immediately, since the scan will never return to it.
+  function testNeighbours(p, k){
+    if(expanded[p]) return;
+    expanded[p] = true;
+    const g = regions[k];
+    const pr = rowOf(p), pc = colOf(p);
+    snap({kind:"expand", scan:outerIdx, active:k, current:p,
+      text:`Visiting ${label(p)} (in region <b>${name(k)}</b>, currently ${g.min}–${g.max}) to test its neighbours.`,
+      logText:`visit  ${label(p)} in ${name(k)}`, logCls:"s"});
 
-      if(k === -1 && v !== seedVal){
-        snap({kind:"skip", scan:i,
-          text:`${label(i)} = <b>${v}</b> is not a seed and belongs to no region. Nothing to do here, move to the next pixel.`,
-          logText:`skip   ${label(i)}=${v}`, logCls:"m"});
+    for(const [dr,dc] of offs){
+      const nr = pr+dr, nc = pc+dc;
+      if(nr<0 || nc<0 || nr>=R || nc>=C) continue;
+      const n = idx(nr,nc);
+      if(owner[n] === k) continue;
+      if(owner[n] !== -1){
+        const nv = G[nr][nc];
+        snap({kind:"taken", scan:outerIdx, test:n, active:k, current:p,
+          text:`${label(n)} = <b>${nv}</b> already belongs to region <b>${name(owner[n])}</b>, so region ${name(k)} leaves it alone.`,
+          logText:`held   ${label(n)}=${nv} by ${name(owner[n])}`, logCls:"m"});
         continue;
       }
-
-      if(k === -1){
-        k = regions.length;
-        regions.push({seed:i, min:v, max:v, n:1});
-        owner[i] = k; changed = true;
-        snap({kind:"new", scan:i, active:k,
-          text:`${label(i)} = <b>${v}</b> is a seed and is in no region yet, so region <b>${name(k)}</b> starts here. Its min and max are both ${v}. Now visit its neighbours.`,
-          logText:`start region ${name(k)} at ${label(i)}=${v}`, logCls:"s"});
+      const nv = G[nr][nc];
+      const lo = Math.min(g.min, nv), hi = Math.max(g.max, nv);
+      const ok = (hi - lo) <= T;
+      const arith = `region ${name(k)} is ${g.min}–${g.max}; with ${label(n)} it becomes ${lo}–${hi}, so max − min = ${hi}−${lo} = <b>${hi-lo}</b>`;
+      if(ok){
+        owner[n] = k; g.min = lo; g.max = hi; g.n++;
+        const behind = n < outerIdx;
+        snap({kind:"accept", scan:outerIdx, test:n, active:k, current:p,
+          text:`${label(n)} = <b>${nv}</b>: ${arith}, which is ≤ ${T}. It joins region ${name(k)}` +
+            (behind ? `. The scan already passed ${label(n)}, so it is visited immediately as well.`
+                    : `, and will have its own neighbours tested when the scan reaches it.`),
+          logText:`add    ${label(n)}=${nv} → ${name(k)}  [${lo}-${hi}]`, logCls:"a"});
+        if(behind) testNeighbours(n, k);
       } else {
-        const g = regions[k];
-        snap({kind:"expand", scan:i, active:k,
-          text:`${label(i)} = <b>${v}</b> is already inside region <b>${name(k)}</b> (currently ${g.min}–${g.max}). Visit its neighbours to expand it.`,
-          logText:`visit  ${label(i)}=${v} in ${name(k)}`, logCls:"s"});
-      }
-
-      const g = regions[k];
-      for(const [dr,dc] of offs){
-        const nr = r+dr, nc = c+dc;
-        if(nr<0 || nc<0 || nr>=R || nc>=C){
-          snap({kind:"edge", scan:i, active:k,
-            text:`Neighbour (${nr},${nc}) is outside the image.`});
-          continue;
-        }
-        const n = idx(nr,nc), nv = G[nr][nc];
-
-        if(owner[n] === k){
-          snap({kind:"same", scan:i, test:n, active:k,
-            text:`${label(n)} is already part of region <b>${name(k)}</b>.`});
-          continue;
-        }
-        if(owner[n] !== -1){
-          snap({kind:"taken", scan:i, test:n, active:k,
-            text:`${label(n)} = <b>${nv}</b> is taken by region <b>${name(owner[n])}</b>, so region ${name(k)} leaves it alone.`,
-            logText:`held   ${label(n)}=${nv} by ${name(owner[n])}`, logCls:"m"});
-          continue;
-        }
-
-        const lo = Math.min(g.min, nv), hi = Math.max(g.max, nv);
-        const ok = (hi - lo) <= T;
-        const arith = `region ${name(k)} is ${g.min}–${g.max}; with ${label(n)} it becomes ${lo}–${hi}, so max − min = ${hi}−${lo} = <b>${hi-lo}</b>`;
-        if(ok){
-          owner[n] = k; g.min = lo; g.max = hi; g.n++; changed = true;
-          snap({kind:"accept", scan:i, test:n, active:k,
-            text:`${label(n)} = <b>${nv}</b>: ${arith}, which is ≤ ${T}. It joins region ${name(k)}.`,
-            logText:`add    ${label(n)}=${nv} → ${name(k)}  [${lo}-${hi}]`, logCls:"a"});
-        } else {
-          snap({kind:"reject", scan:i, test:n, active:k,
-            text:`${label(n)} = <b>${nv}</b>: ${arith}, which is > ${T}. It is turned down, though another region may still take it later.`,
-            logText:`no     ${label(n)}=${nv} ✗ ${name(k)}  [${lo}-${hi}]`, logCls:"x"});
-        }
+        snap({kind:"reject", scan:outerIdx, test:n, active:k, current:p,
+          text:`${label(n)} = <b>${nv}</b>: ${arith}, which is > ${T}. It is turned down, though another region may still take it later.`,
+          logText:`no     ${label(n)}=${nv} ✗ ${name(k)}  [${lo}-${hi}]`, logCls:"x"});
       }
     }
-    if(!repeat) break;
+  }
+
+  for(let i = 0; i < R*C; i++){
+    outerIdx = i;
+    const r = rowOf(i), c = colOf(i), v = G[r][c];
+
+    if(owner[i] === -1 && v !== seedVal){
+      snap({kind:"skip", scan:i,
+        text:`${label(i)} = <b>${v}</b> is not a seed and belongs to no region. Nothing to do here, move to the next pixel.`,
+        logText:`skip   ${label(i)}=${v}`, logCls:"m"});
+      continue;
+    }
+
+    if(owner[i] === -1){
+      const k = regions.length;
+      regions.push({seed:i, min:v, max:v, n:1});
+      owner[i] = k;
+      snap({kind:"new", scan:i, active:k,
+        text:`${label(i)} = <b>${v}</b> is a seed and is in no region yet, so region <b>${name(k)}</b> starts here. Its min and max are both ${v}.`,
+        logText:`start region ${name(k)} at ${label(i)}=${v}`, logCls:"s"});
+      testNeighbours(i, k);
+    } else if(!expanded[i]){
+      snap({kind:"already", scan:i, active:owner[i],
+        text:`${label(i)} = <b>${v}</b> already belongs to region <b>${name(owner[i])}</b> — it was picked up while a nearby pixel was being tested. Now visit its own neighbours to keep expanding the region.`,
+        logText:`(already in ${name(owner[i])}) ${label(i)}=${v}`, logCls:"m"});
+      testNeighbours(i, owner[i]);
+    } else {
+      snap({kind:"already", scan:i, active:owner[i],
+        text:`${label(i)} = <b>${v}</b> already belongs to region <b>${name(owner[i])}</b> and its neighbours have already been tested, so the scan just continues.`,
+        logText:`(already done) ${label(i)}=${v}`, logCls:"m"});
+    }
   }
 
   const assigned = owner.filter(o => o !== -1).length;
@@ -332,14 +357,37 @@ function drawGrid(){
   gridEl.style.setProperty("--cols", C);
   gridEl.innerHTML = "";
   for(let r=0;r<R;r++) for(let c=0;c<C;c++){
-    const b = document.createElement("button");
-    b.type = "button"; b.className = "cell"; b.dataset.i = idx(r,c);
-    b.setAttribute("aria-label", `row ${r}, column ${c}, value ${G[r][c]}`);
-    b.innerHTML = `<span class="coord">${r},${c}</span>${G[r][c]}<span class="tag"></span>`;
-    b.addEventListener("click", () => { $("seedVal").value = G[r][c]; stop(); build(); });
-    gridEl.appendChild(b);
+    const d = document.createElement("div");
+    d.className = "cell"; d.dataset.i = idx(r,c);
+    d.innerHTML = `<span class="coord">${r},${c}</span><input type="number" class="cellval" inputmode="numeric" aria-label="row ${r}, column ${c} value"><span class="tag"></span>`;
+    const inp = d.querySelector(".cellval");
+    inp.value = G[r][c];
+    inp.addEventListener("change", () => {
+      let v = parseInt(inp.value, 10);
+      if(isNaN(v)) v = 0;
+      G[r][c] = v; inp.value = v;
+      syncText(); stop(); build();
+    });
+    inp.addEventListener("keydown", e => { if(e.key === "Enter") inp.blur(); });
+    d.addEventListener("dblclick", () => { $("seedVal").value = G[r][c]; stop(); build(); });
+    gridEl.appendChild(d);
   }
 }
+
+function resizeGrid(){
+  const newR = clamp(+$("rowsIn").value, 1, 20);
+  const newC = clamp(+$("colsIn").value, 1, 20);
+  const next = [];
+  for(let r=0;r<newR;r++){
+    const row = [];
+    for(let c=0;c<newC;c++) row.push(r<R && c<C ? G[r][c] : 0);
+    next.push(row);
+  }
+  G = next; R = newR; C = newC;
+  $("rowsIn").value = R; $("colsIn").value = C;
+  syncText(); stop(); drawGrid(); build();
+}
+function clamp(v,a,b){ return Math.max(a, Math.min(b, isNaN(v)?a:v)); }
 
 function render(){
   const s = steps[at];
@@ -357,6 +405,7 @@ function render(){
     } else { tag.textContent = ""; }
     if(G[rowOf(i)][colOf(i)] === s.seedVal) el.classList.add("seedmark");
     if(i === s.scan) el.classList.add("scan");
+    if(i === s.current) el.classList.add("scan");
     if(i === s.test) el.classList.add("test");
     if(i === s.test && s.kind === "reject") el.classList.add("rejected");
   });
@@ -409,8 +458,10 @@ $("play").addEventListener("click", () => {
 });
 $("speed").addEventListener("input", () => { if(timer){ clearInterval(timer); timer = setInterval(next, +$("speed").value); } });
 
-["seedVal","conn","multi"].forEach(id => $(id).addEventListener("change", () => { stop(); build(); }));
+["seedVal","conn"].forEach(id => $(id).addEventListener("change", () => { stop(); build(); }));
 $("thr").addEventListener("input", () => { $("thrOut").textContent = $("thr").value; stop(); build(); });
+
+$("resize").addEventListener("click", resizeGrid);
 
 $("apply").addEventListener("click", () => {
   const rows = $("gridText").value.trim().split(/\n+/)
@@ -420,15 +471,18 @@ $("apply").addEventListener("click", () => {
   const w = Math.max(...rows.map(r => r.length));
   G = rows.map(r => { while(r.length < w) r.push(0); return r; });
   R = G.length; C = G[0].length;
+  $("rowsIn").value = R; $("colsIn").value = C;
   stop(); drawGrid(); build();
 });
 $("restore").addEventListener("click", () => {
   G = ORIGINAL.map(r => r.slice()); R = G.length; C = G[0].length;
-  $("seedVal").value = 6; $("thr").value = 3; $("thrOut").textContent = "3"; $("multi").checked = false;
+  $("rowsIn").value = R; $("colsIn").value = C;
+  $("seedVal").value = 6; $("thr").value = 3; $("thrOut").textContent = "3";
   syncText(); stop(); drawGrid(); build();
 });
 function syncText(){ $("gridText").value = G.map(r => r.join(" ")).join("\n"); }
 
+$("rowsIn").value = R; $("colsIn").value = C;
 syncText(); drawGrid(); build();
 </script>
 </body>

@@ -32,7 +32,6 @@
     border-radius:4px;
     padding:18px 20px;
     margin-bottom:20px;
-    max-width:1180px;
   }
   .panel h2{
     font-size:15px; margin:0 0 12px;
@@ -104,9 +103,12 @@
 
   .grid-caption{ font-size:12px; color:#6b6459; margin-top:8px; max-width:460px; }
 
-  .tree-wrap{ overflow-x:auto; padding:10px 4px 20px; }
+  .tree-wrap{ overflow-x:auto; overflow-y:auto; padding:10px 4px 20px; display:block; max-height:500px; max-width:100%; position:relative; }
   .tree, .tree ul, .tree li{ list-style:none; margin:0; padding:0; position:relative; }
-  .tree{ text-align:center; }
+  .tree{ text-align:center; min-width:max-content; white-space:nowrap; transform-origin:top center; transition:transform 0.2s ease; }
+  .tree-controls{ display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap; }
+  .tree-controls button{ font-size:12px; padding:5px 10px; }
+  .node{ cursor:pointer; }
   .tree ul{ display:flex; padding-top:26px; position:relative; }
   .tree li{
     flex:1; display:flex; flex-direction:column; align-items:center;
@@ -255,6 +257,9 @@ let mergeOps = [];
 let mergeStep = 0;
 let mergeTimer = null;
 let mergeConn = null;
+
+let treeZoomLevel = 1;
+let treeZoomTarget = null;
 
 function clamp(v,lo,hi){ return Math.max(lo, Math.min(hi, v)); }
 function nextPow2Capped(x){
@@ -446,14 +451,54 @@ function currentBlockFor(r,c,processedSet){
   return node;
 }
 
+function applyTreeZoom(){
+  const treeEl = document.querySelector('.tree');
+  if(!treeEl) return;
+  treeEl.style.transform = `scale(${treeZoomLevel})`;
+}
+
+function zoomTreeTo(level){
+  treeZoomLevel = Math.max(0.5, Math.min(3, level));
+  applyTreeZoom();
+}
+
+function zoomTreeIn(){
+  zoomTreeTo(treeZoomLevel + 0.2);
+}
+
+function zoomTreeOut(){
+  zoomTreeTo(treeZoomLevel - 0.2);
+}
+
+function resetTreeZoom(){
+  zoomTreeTo(1);
+  treeZoomTarget = null;
+}
+
+function zoomTreeToNode(nodePath){
+  if(!root) return;
+  const findNode = (nd) => nd.path === nodePath ? nd : (nd.children ? nd.children.find(findNode) : null);
+  const node = findNode(root);
+  if(!node) return;
+  treeZoomTarget = nodePath;
+  zoomTreeTo(2);
+}
+
+function updateZoomDisplay(){
+  const zoomEl = document.getElementById('zoomLevel');
+  if(zoomEl){
+    zoomEl.textContent = Math.round(treeZoomLevel * 100) + '%';
+  }
+}
+
 function renderTreeHTML(node, processedSet, activePath){
   const isProcessed = processedSet.has(node.path);
   const isActive = node.path === activePath;
   if(!isProcessed){
-    return `<li><div class="node pending${isActive?' active':''}">(${node.x0},${node.y0}) ${node.size}\u00d7${node.size}<br><b>PENDING</b></div></li>`;
+    return `<li><div class="node pending${isActive?' active':''}" data-path="${node.path}">(${node.x0},${node.y0}) ${node.size}\u00d7${node.size}<br><b>PENDING</b></div></li>`;
   }
   const cls = node.children ? 'split' : 'leaf';
-  let html = `<li><div class="node ${cls}${isActive?' active':''}">`+
+  let html = `<li><div class="node ${cls}${isActive?' active':''}" data-path="${node.path}">`+
              `(${node.x0},${node.y0}) ${node.size}\u00d7${node.size}<br>`+
              `max ${node.max} &middot; min ${node.min}<br>`+
              `&Delta; ${node.diff}<br><b>${node.children?'SPLIT':'LEAF'}</b></div>`;
@@ -508,11 +553,33 @@ function renderSplitAtStep(step){
       <span><span class="swatch" style="background:#fdece3;border-color:#b3532b"></span>split (&Delta; &gt; T)</span>
       <span><span class="swatch" style="background:#e7f2ea;border-color:#2f6f5e"></span>leaf (&Delta; &le; T or 1&times;1)</span>
       <span><span class="swatch" style="background:#eceae4;border-color:#a39a89"></span>pending</span>
+    </div>
+    <div class="tree-controls">
+      <button id="treeZoomIn" class="secondary">🔍+ Zoom in</button>
+      <button id="treeZoomOut" class="secondary">🔍− Zoom out</button>
+      <button id="treeZoomReset" class="secondary">Reset zoom</button>
+      <span style="font-size:12px; color:#6b6459; line-height:28px; margin-left:8px;" id="zoomLevel">100%</span>
     </div>`;
   const treeWrap = document.createElement('div');
   treeWrap.className = 'tree-wrap';
   treeWrap.innerHTML = `<ul class="tree">${renderTreeHTML(root, processedSet, activeNode?activeNode.path:null)}</ul>`;
   treeCol.appendChild(treeWrap);
+  
+  // Add click handlers to tree nodes
+  setTimeout(()=>{
+    document.querySelectorAll('.tree .node').forEach(nodeEl=>{
+      nodeEl.addEventListener('click', (e)=>{
+        e.stopPropagation();
+        const nodePath = nodeEl.dataset.path;
+        zoomTreeToNode(nodePath);
+        updateZoomDisplay();
+      });
+    });
+    document.getElementById('treeZoomIn').addEventListener('click', ()=>{ zoomTreeIn(); updateZoomDisplay(); });
+    document.getElementById('treeZoomOut').addEventListener('click', ()=>{ zoomTreeOut(); updateZoomDisplay(); });
+    document.getElementById('treeZoomReset').addEventListener('click', ()=>{ resetTreeZoom(); updateZoomDisplay(); });
+    updateZoomDisplay();
+  }, 0);
 
   row.appendChild(gridCol);
   row.appendChild(treeCol);
@@ -734,6 +801,7 @@ function resetSplitMergeUI(){
   stopSplitPlay(); stopMergePlay();
   root=null; splitEvents=[]; splitLeaves=[]; cellLeafIndex=null; splitStep=0;
   mergeOps=[]; mergeStep=0; mergeConn=null;
+  treeZoomLevel = 1; treeZoomTarget = null;
   document.getElementById('splitStepper').style.display='none';
   document.getElementById('splitCaption').innerHTML='';
   document.getElementById('splitContent').innerHTML = '<div class="placeholder">Click "Initialize simulation" above, then step through the split with the controls that appear here.</div>';
