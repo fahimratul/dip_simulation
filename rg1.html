@@ -68,8 +68,8 @@
   .cellval:focus{outline:3px solid #2f6fd0;outline-offset:-2px}
   .cell.seedmark::after{content:"";position:absolute;top:3px;right:3px;width:6px;height:6px;border-radius:50%;
     background:#16202b;opacity:.45;pointer-events:none;z-index:1}
-  .cell.scan{border-color:#111a24;border-width:3px}
-  .cell.test{border-style:dashed;border-width:3px;border-color:#111a24}
+  .cell.scan{border-color:#cd0026!important;border-width:3px;background:transparent;box-shadow:inset 0 0 8px rgba(255,180,0,.4)}
+  .cell.test{border-style:dashed;border-width:3px;border-color:#111a24 !important;background:transparent;box-shadow:inset 0 0 8px rgba(22, 16, 0, 0.4)}
   .cell.rejected{background:var(--reject-soft)!important;border-color:var(--reject)!important;color:#8a2118}
 
   .legend{display:flex;flex-wrap:wrap;gap:8px 16px;margin-top:12px;font-size:12.5px;color:#4a5561}
@@ -111,6 +111,7 @@
   .note{font-size:13px;color:var(--muted);margin-top:8px;max-width:70ch}
   ol.rules{font-size:14px;color:#46525f;max-width:70ch;padding-left:20px;margin:10px 0 0}
   ol.rules li{margin-bottom:3px}
+  input[type=number]{background:transparent;}
   @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
