@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Region growing by raster scan</title>
+<style>
+  :root{
+    --ink:#16202b; --ink-2:#1e2b39;
+    --paper:#f3f1e9; --line:#cfc9b8; --muted:#7b8794;
+    --reject:#e2493d; --reject-soft:#fbdcd8;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--paper); color:var(--ink);
+    font-family:"Inter","Segoe UI",Helvetica,Arial,sans-serif; line-height:1.5;
+    padding:20px 16px 56px;
+    background-image:linear-gradient(to bottom,transparent 27px,rgba(120,140,160,.16) 28px);
+    background-size:100% 28px;
+  }
+  .wrap{max-width:1080px;margin:0 auto}
+
+  header{margin-bottom:20px}
+  h1{font-size:clamp(24px,5.2vw,38px);letter-spacing:-.02em;margin:0 0 8px;font-weight:650}
+  header p{margin:0 0 6px;color:#46525f;max-width:70ch;font-size:15px}
+  .rule{height:6px;margin-top:14px;border-radius:3px;opacity:.8;
+    background:repeating-linear-gradient(90deg,#e2a600 0 24px,#2f6fd0 24px 40px,#17916a 40px 52px,transparent 52px 74px)}
+
+  .panel{background:#fffdf6;border:1px solid var(--line);border-radius:10px;padding:14px 16px;
+    box-shadow:0 1px 0 rgba(22,32,43,.06)}
+
+  .controls{display:flex;flex-wrap:wrap;gap:14px 22px;align-items:flex-end;margin-bottom:16px}
+  .field{display:flex;flex-direction:column;gap:5px;min-width:0}
+  .field label{font-size:12.5px;color:var(--muted)}
+  select,input[type=number]{font:inherit;font-size:14px;padding:6px 9px;border:1px solid var(--line);
+    border-radius:7px;background:#fff;color:var(--ink)}
+  input[type=range]{width:150px;accent-color:#17916a}
+  .val{font-family:ui-monospace,Menlo,monospace;font-weight:600}
+  .check{flex-direction:row;align-items:center;gap:7px}
+  .check label{font-size:13.5px;color:var(--ink)}
+
+  .buttons{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0}
+  button{font:inherit;font-size:14px;font-weight:550;padding:9px 15px;border-radius:8px;
+    border:1px solid var(--ink);background:#fff;color:var(--ink);cursor:pointer}
+  button:hover:not(:disabled){background:#eef1f4}
+  button.primary{background:var(--ink);color:#fff}
+  button.primary:hover:not(:disabled){background:var(--ink-2)}
+  button:disabled{opacity:.4;cursor:not-allowed}
+  button:focus-visible,select:focus-visible,input:focus-visible,.cell:focus-visible{outline:3px solid #2f6fd0;outline-offset:2px}
+
+  .stage{display:grid;grid-template-columns:minmax(0,1fr);gap:18px}
+  @media(min-width:900px){.stage{grid-template-columns:minmax(0,1.1fr) minmax(300px,.9fr)}}
+
+  .gridwrap{overflow-x:auto}
+  #grid{display:grid;gap:4px;grid-template-columns:repeat(var(--cols),minmax(36px,1fr));min-width:310px}
+  .cell{position:relative;aspect-ratio:1/1;border-radius:6px;border:1.5px solid #ddd7c6;background:#fffdf6;
+    color:#3c4652;font-family:ui-monospace,Menlo,monospace;font-size:clamp(14px,3.4vw,20px);font-weight:600;
+    display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background .12s,border-color .12s}
+  .cell .coord{position:absolute;top:2px;left:4px;font-size:9px;font-weight:500;color:var(--muted);opacity:.5}
+  .cell .tag{position:absolute;bottom:1px;right:4px;font-size:10px;font-weight:700;opacity:.8}
+  .cell.seedmark::after{content:"";position:absolute;top:3px;right:3px;width:6px;height:6px;border-radius:50%;
+    background:#16202b;opacity:.45}
+  .cell.scan{border-color:#111a24;border-width:3px}
+  .cell.test{border-style:dashed;border-width:3px;border-color:#d2079c}
+  .cell.rejected{background:var(--reject-soft)!important;border-color:var(--reject)!important;color:#8a2118}
+
+  .legend{display:flex;flex-wrap:wrap;gap:8px 16px;margin-top:12px;font-size:12.5px;color:#4a5561}
+  .legend span{display:flex;align-items:center;gap:6px}
+  .sw{width:15px;height:15px;border-radius:4px;border:1.5px solid var(--line);background:#fffdf6}
+  .sw.scan{border-color:#111a24;border-width:3px}
+  .sw.test{border-color:#111a24;border-width:3px;border-style:dashed}
+  .sw.rej{background:var(--reject-soft);border-color:var(--reject)}
+  .sw.sd{position:relative}
+  .sw.sd::after{content:"";position:absolute;top:1px;right:1px;width:5px;height:5px;border-radius:50%;background:#16202b;opacity:.5}
+
+  .status{border-left:4px solid var(--ink);padding:10px 0 10px 12px;margin-bottom:14px;font-size:15px;min-height:64px}
+  .status .step{font-size:12px;color:var(--muted);margin-bottom:2px}
+  .status b{font-family:ui-monospace,Menlo,monospace}
+  .status.accept{border-color:#17916a}
+  .status.reject{border-color:var(--reject)}
+  .status.new{border-color:#2f6fd0}
+  .status.skip{border-color:var(--line)}
+
+  table.regions{width:100%;border-collapse:collapse;font-size:13px;margin-bottom:14px}
+  table.regions th{text-align:left;font-weight:600;color:var(--muted);font-size:11.5px;padding:0 6px 4px 0}
+  table.regions td{padding:4px 6px 4px 0;border-top:1px solid #ece7d8;
+    font-family:ui-monospace,Menlo,monospace}
+  table.regions td:first-child{width:22px}
+  .chip{display:inline-block;width:15px;height:15px;border-radius:4px;border:1.5px solid}
+  .empty{color:var(--muted);font-size:13px;font-family:inherit}
+
+  #log{height:190px;overflow-y:auto;border:1px solid var(--line);border-radius:8px;background:#fffdf6;
+    padding:8px 10px;font-size:12.5px;font-family:ui-monospace,Menlo,monospace;color:#33404d}
+  #log div{padding:2px 0;border-bottom:1px dotted #e6e0cf}
+  #log div:last-child{border-bottom:0}
+  #log .a{color:#116048} #log .x{color:#8a2118} #log .s{color:#123a6e} #log .m{color:var(--muted)}
+
+  h2{font-size:14px;font-weight:600;margin:0 0 8px;color:#3c4652}
+  details{margin-top:18px}
+  summary{cursor:pointer;font-size:14px;font-weight:550}
+  textarea{width:100%;min-height:150px;font-family:ui-monospace,Menlo,monospace;font-size:14px;
+    border:1px solid var(--line);border-radius:8px;padding:10px;margin-top:10px;background:#fffdf6}
+  .note{font-size:13px;color:var(--muted);margin-top:8px;max-width:70ch}
+  ol.rules{font-size:14px;color:#46525f;max-width:70ch;padding-left:20px;margin:10px 0 0}
+  ol.rules li{margin-bottom:3px}
+  @media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>Region growing across a raster scan</h1>
+  <h2>It is not hundred percent accurate</h2>
+  <p>The scan walks the 8×8 image one pixel at a time, left to right and then down to the next row. What happens at each pixel depends on what it is:</p>
+  <ol class="rules">
+    <li>Not a seed and not yet in a region — nothing to do, move on.</li>
+    <li>A seed with no region yet — start a new region here, then test its neighbours.</li>
+    <li>Already inside a region (seed or not) — test its neighbours and grow that region.</li>
+  </ol>
+  <p style="margin-top:10px">A neighbour is taken in only if it is still free and the region's max − min stays within the threshold after adding it. A pixel turned down by one region can still be picked up by another one later.</p>
+  <div class="rule"></div>
+</header>
+
+<div class="panel controls">
+  <div class="field">
+    <label for="seedVal">Seed value</label>
+    <input type="number" id="seedVal" value="6" style="width:74px">
+  </div>
+  <div class="field">
+    <label for="thr">Threshold (max − min): <span class="val" id="thrOut">3</span></label>
+    <input type="range" id="thr" min="0" max="9" step="1" value="3">
+  </div>
+  <div class="field">
+    <label for="conn">Neighbourhood</label>
+    <select id="conn">
+      <option value="4" selected>4-connected</option>
+      <option value="8">8-connected</option>
+    </select>
+  </div>
+  <div class="field check">
+    <input type="checkbox" id="multi">
+    <label for="multi">Repeat the scan until nothing changes</label>
+  </div>
+</div>
+
+<div class="buttons">
+  <button id="back">Back</button>
+  <button id="step" class="primary">Step</button>
+  <button id="play">Play</button>
+  <button id="finish">Run to end</button>
+  <button id="reset">Reset</button>
+  <div class="field" style="margin-left:auto">
+    <label for="speed">Speed</label>
+    <input type="range" id="speed" min="40" max="800" step="20" value="240">
+  </div>
+</div>
+
+<div class="stage">
+  <div>
+    <div class="gridwrap"><div id="grid"></div></div>
+    <div class="legend">
+      <span><i class="sw scan"></i>scan is here</span>
+      <span><i class="sw test"></i>neighbour being tested</span>
+      <span><i class="sw rej"></i>turned down</span>
+      <span><i class="sw sd"></i>seed value</span>
+      <span>colour = region</span>
+    </div>
+  </div>
+
+  <div>
+    <div class="panel">
+      <div class="status" id="status"><div class="step">Step 0</div>Press Step to begin.</div>
+      <h2>Regions</h2>
+      <div id="regions"><p class="empty">No region has been started yet.</p></div>
+      <h2>History</h2>
+      <div id="log"></div>
+    </div>
+  </div>
+</div>
+
+<details>
+  <summary>Edit the pixel values</summary>
+  <textarea id="gridText" spellcheck="false"></textarea>
+  <div class="buttons"><button id="apply">Apply values</button><button id="restore">Restore original image</button></div>
+  <p class="note">One row per line, values separated by spaces. Any grid size works.</p>
+</details>
+
+<p class="note" style="margin-top:22px">A single pass leaves a gap worth noticing: a pixel that is absorbed into a region after the scan has already passed it never gets a turn to grow from. Tick “repeat the scan” to keep scanning until the picture stops changing.</p>
+</div>
+
+<script>
+"use strict";
+
+const ORIGINAL = [
+  [5,6,6,7,6,7,6,6],
+  [6,3,6,7,5,5,3,7],
+  [6,6,4,4,3,2,3,6],
+  [5,4,5,4,2,3,4,6],
+  [6,3,2,3,3,2,3,7],
+  [0,0,0,0,2,2,5,6],
+  [1,1,0,1,0,3,4,4],
+  [1,0,1,0,2,3,5,4]
+];
+
+const PALETTE = [
+  ["#fdf0c4","#00ff88","#6b4a00"],
+  ["#dbe7fb","#2f6fd0","#123a6e"],
+  ["#d8f0e4","#17916a","#0d5340"],
+  ["#f3ddf3","#a13fa1","#5f1f5f"],
+  ["#fde0d2","#d4682a","#7a3410"],
+  ["#e2e0f7","#5b52c9","#2e2878"],
+  ["#dff2f7","#1f8aa8","#0f4f61"],
+  ["#f7dfe6","#b83a5e","#6d1c33"]
+];
+const pal = k => PALETTE[k % PALETTE.length];
+const name = k => String.fromCharCode(65 + k);
+
+let G = ORIGINAL.map(r => r.slice());
+let R = G.length, C = G[0].length;
+let steps = [], at = 0, timer = null;
+
+const $ = id => document.getElementById(id);
+const gridEl = $("grid"), logEl = $("log"), statusEl = $("status"), regionsEl = $("regions");
+const idx = (r,c) => r*C + c;
+const rowOf = i => Math.floor(i/C), colOf = i => i%C;
+const label = i => `(${rowOf(i)},${colOf(i)})`;
+
+/* ---------------- build every step of the scan ---------------- */
+function build(){
+  const seedVal = +$("seedVal").value;
+  const T = +$("thr").value;
+  const conn = +$("conn").value;
+  const repeat = $("multi").checked;
+  const offs = conn === 4
+    ? [[-1,0],[0,-1],[0,1],[1,0]]
+    : [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+
+  const owner = new Array(R*C).fill(-1);
+  const regions = [];
+  const out = [];
+
+  const snap = o => out.push(Object.assign({
+    owner: owner.slice(),
+    regions: regions.map(r => ({seed:r.seed, min:r.min, max:r.max, n:r.n})),
+    scan:-1, test:-1, active:-1, kind:"", seedVal
+  }, o));
+
+  snap({kind:"start", text:`The scan starts at (0,0). Seed value is <b>${seedVal}</b>, threshold is <b>${T}</b>, so any region must keep max − min ≤ ${T}.`});
+
+  let pass = 0, changed = true, guard = 0;
+  while(changed && guard++ < 60){
+    changed = false; pass++;
+    if(repeat) snap({kind:"pass", text:`Pass ${pass} starts again at (0,0).`});
+
+    for(let i = 0; i < R*C; i++){
+      const r = rowOf(i), c = colOf(i), v = G[r][c];
+      let k = owner[i];
+
+      if(k === -1 && v !== seedVal){
+        snap({kind:"skip", scan:i,
+          text:`${label(i)} = <b>${v}</b> is not a seed and belongs to no region. Nothing to do here, move to the next pixel.`,
+          logText:`skip   ${label(i)}=${v}`, logCls:"m"});
+        continue;
+      }
+
+      if(k === -1){
+        k = regions.length;
+        regions.push({seed:i, min:v, max:v, n:1});
+        owner[i] = k; changed = true;
+        snap({kind:"new", scan:i, active:k,
+          text:`${label(i)} = <b>${v}</b> is a seed and is in no region yet, so region <b>${name(k)}</b> starts here. Its min and max are both ${v}. Now visit its neighbours.`,
+          logText:`start region ${name(k)} at ${label(i)}=${v}`, logCls:"s"});
+      } else {
+        const g = regions[k];
+        snap({kind:"expand", scan:i, active:k,
+          text:`${label(i)} = <b>${v}</b> is already inside region <b>${name(k)}</b> (currently ${g.min}–${g.max}). Visit its neighbours to expand it.`,
+          logText:`visit  ${label(i)}=${v} in ${name(k)}`, logCls:"s"});
+      }
+
+      const g = regions[k];
+      for(const [dr,dc] of offs){
+        const nr = r+dr, nc = c+dc;
+        if(nr<0 || nc<0 || nr>=R || nc>=C){
+          snap({kind:"edge", scan:i, active:k,
+            text:`Neighbour (${nr},${nc}) is outside the image.`});
+          continue;
+        }
+        const n = idx(nr,nc), nv = G[nr][nc];
+
+        if(owner[n] === k){
+          snap({kind:"same", scan:i, test:n, active:k,
+            text:`${label(n)} is already part of region <b>${name(k)}</b>.`});
+          continue;
+        }
+        if(owner[n] !== -1){
+          snap({kind:"taken", scan:i, test:n, active:k,
+            text:`${label(n)} = <b>${nv}</b> is taken by region <b>${name(owner[n])}</b>, so region ${name(k)} leaves it alone.`,
+            logText:`held   ${label(n)}=${nv} by ${name(owner[n])}`, logCls:"m"});
+          continue;
+        }
+
+        const lo = Math.min(g.min, nv), hi = Math.max(g.max, nv);
+        const ok = (hi - lo) <= T;
+        const arith = `region ${name(k)} is ${g.min}–${g.max}; with ${label(n)} it becomes ${lo}–${hi}, so max − min = ${hi}−${lo} = <b>${hi-lo}</b>`;
+        if(ok){
+          owner[n] = k; g.min = lo; g.max = hi; g.n++; changed = true;
+          snap({kind:"accept", scan:i, test:n, active:k,
+            text:`${label(n)} = <b>${nv}</b>: ${arith}, which is ≤ ${T}. It joins region ${name(k)}.`,
+            logText:`add    ${label(n)}=${nv} → ${name(k)}  [${lo}-${hi}]`, logCls:"a"});
+        } else {
+          snap({kind:"reject", scan:i, test:n, active:k,
+            text:`${label(n)} = <b>${nv}</b>: ${arith}, which is > ${T}. It is turned down, though another region may still take it later.`,
+            logText:`no     ${label(n)}=${nv} ✗ ${name(k)}  [${lo}-${hi}]`, logCls:"x"});
+        }
+      }
+    }
+    if(!repeat) break;
+  }
+
+  const assigned = owner.filter(o => o !== -1).length;
+  snap({kind:"done",
+    text:`The scan is finished. <b>${regions.length}</b> region${regions.length===1?"":"s"} cover <b>${assigned}</b> of ${R*C} pixels; ${R*C-assigned} pixels were never taken by anything.`,
+    logText:`done — ${regions.length} regions, ${assigned}/${R*C} pixels`, logCls:"s"});
+
+  steps = out; at = 0;
+  render();
+}
+
+/* ---------------- drawing ---------------- */
+function drawGrid(){
+  gridEl.style.setProperty("--cols", C);
+  gridEl.innerHTML = "";
+  for(let r=0;r<R;r++) for(let c=0;c<C;c++){
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "cell"; b.dataset.i = idx(r,c);
+    b.setAttribute("aria-label", `row ${r}, column ${c}, value ${G[r][c]}`);
+    b.innerHTML = `<span class="coord">${r},${c}</span>${G[r][c]}<span class="tag"></span>`;
+    b.addEventListener("click", () => { $("seedVal").value = G[r][c]; stop(); build(); });
+    gridEl.appendChild(b);
+  }
+}
+
+function render(){
+  const s = steps[at];
+
+  [...gridEl.children].forEach(el => {
+    const i = +el.dataset.i;
+    const k = s.owner[i];
+    el.className = "cell";
+    el.style.background = ""; el.style.borderColor = ""; el.style.color = "";
+    const tag = el.querySelector(".tag");
+    if(k !== -1){
+      const p = pal(k);
+      el.style.background = p[0]; el.style.borderColor = p[1]; el.style.color = p[2];
+      tag.textContent = name(k); tag.style.color = p[1];
+    } else { tag.textContent = ""; }
+    if(G[rowOf(i)][colOf(i)] === s.seedVal) el.classList.add("seedmark");
+    if(i === s.scan) el.classList.add("scan");
+    if(i === s.test) el.classList.add("test");
+    if(i === s.test && s.kind === "reject") el.classList.add("rejected");
+  });
+
+  statusEl.className = "status " + (["accept","reject","new","skip"].includes(s.kind) ? s.kind : "");
+  statusEl.innerHTML = `<div class="step">Step ${at} of ${steps.length-1}</div>${s.text}`;
+
+  if(!s.regions.length){
+    regionsEl.innerHTML = `<p class="empty">No region has been started yet.</p>`;
+  } else {
+    regionsEl.innerHTML = `<table class="regions">
+      <tr><th></th><th>Region</th><th>Seed</th><th>Pixels</th><th>min–max</th><th>Span</th></tr>` +
+      s.regions.map((g,k) => {
+        const p = pal(k);
+        return `<tr${k===s.active?' style="background:#f6f3e6"':''}>
+          <td><i class="chip" style="background:${p[0]};border-color:${p[1]}"></i></td>
+          <td>${name(k)}</td><td>${label(g.seed)}</td><td>${g.n}</td>
+          <td>${g.min}–${g.max}</td><td>${g.max-g.min}</td></tr>`;
+      }).join("") + `</table>`;
+  }
+
+  logEl.innerHTML = "";
+  for(let j=0;j<=at;j++){
+    const st = steps[j];
+    if(!st.logText) continue;
+    const d = document.createElement("div");
+    d.className = st.logCls || ""; d.textContent = st.logText;
+    logEl.appendChild(d);
+  }
+  logEl.scrollTop = logEl.scrollHeight;
+
+  $("back").disabled = at === 0;
+  $("step").disabled = $("finish").disabled = at >= steps.length-1;
+  if(at >= steps.length-1) stop();
+}
+
+/* ---------------- controls ---------------- */
+function next(){ if(at < steps.length-1){ at++; render(); } else stop(); }
+function stop(){ if(timer){ clearInterval(timer); timer = null; $("play").textContent = "Play"; } }
+
+$("step").addEventListener("click", () => { stop(); next(); });
+$("back").addEventListener("click", () => { stop(); if(at>0){ at--; render(); } });
+$("reset").addEventListener("click", () => { stop(); at = 0; render(); });
+$("finish").addEventListener("click", () => { stop(); at = steps.length-1; render(); });
+$("play").addEventListener("click", () => {
+  if(timer){ stop(); return; }
+  if(at >= steps.length-1) at = 0;
+  timer = setInterval(next, +$("speed").value);
+  $("play").textContent = "Pause";
+});
+$("speed").addEventListener("input", () => { if(timer){ clearInterval(timer); timer = setInterval(next, +$("speed").value); } });
+
+["seedVal","conn","multi"].forEach(id => $(id).addEventListener("change", () => { stop(); build(); }));
+$("thr").addEventListener("input", () => { $("thrOut").textContent = $("thr").value; stop(); build(); });
+
+$("apply").addEventListener("click", () => {
+  const rows = $("gridText").value.trim().split(/\n+/)
+    .map(l => l.trim().split(/[\s,]+/).map(Number).filter(n => !isNaN(n)))
+    .filter(r => r.length);
+  if(!rows.length) return;
+  const w = Math.max(...rows.map(r => r.length));
+  G = rows.map(r => { while(r.length < w) r.push(0); return r; });
+  R = G.length; C = G[0].length;
+  stop(); drawGrid(); build();
+});
+$("restore").addEventListener("click", () => {
+  G = ORIGINAL.map(r => r.slice()); R = G.length; C = G[0].length;
+  $("seedVal").value = 6; $("thr").value = 3; $("thrOut").textContent = "3"; $("multi").checked = false;
+  syncText(); stop(); drawGrid(); build();
+});
+function syncText(){ $("gridText").value = G.map(r => r.join(" ")).join("\n"); }
+
+syncText(); drawGrid(); build();
+</script>
+</body>
+</html>

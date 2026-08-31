@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Region Split &amp; Merge Segmentation &mdash; Step by Step</title>
+<style>
+  :root{
+    --ink:#1b1f23;
+    --paper:#f7f5f0;
+    --panel:#ffffff;
+    --line:#d8d3c8;
+    --accent:#2f6f5e;
+    --accent2:#b3532b;
+    --pad:#3f5fbf;
+    --pending:#eceae4;
+    --mono:'IBM Plex Mono','SFMono-Regular',Consolas,monospace;
+    --sans:'IBM Plex Sans',-apple-system,Segoe UI,Roboto,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:var(--sans);
+    padding:28px 20px 80px;
+  }
+  h1{ font-size:22px; margin:0 0 4px; }
+  .sub{ color:#6b6459; font-size:13px; margin-bottom:22px; max-width:760px; }
+  .panel{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:4px;
+    padding:18px 20px;
+    margin-bottom:20px;
+    max-width:1180px;
+  }
+  .panel h2{
+    font-size:15px; margin:0 0 12px;
+    display:flex; align-items:baseline; gap:8px;
+  }
+  .panel h2 .n{
+    display:inline-flex; align-items:center; justify-content:center;
+    width:20px;height:20px; background:var(--ink); color:var(--paper);
+    border-radius:50%; font-size:11px; font-family:var(--mono);
+  }
+  .controls{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:14px; }
+  label{ font-size:13px; color:#4a4640; }
+  input[type=number]{
+    width:60px; padding:5px 7px; border:1px solid var(--line); border-radius:3px;
+    font-family:var(--mono); font-size:13px;
+  }
+  button{
+    font-family:var(--sans); font-size:13px; padding:7px 14px;
+    border:1px solid var(--ink); background:var(--ink); color:var(--paper);
+    border-radius:3px; cursor:pointer;
+  }
+  button.secondary{ background:transparent; color:var(--ink); }
+  button.ghost{ background:transparent; color:#6b6459; border-color:var(--line); }
+  button:disabled{ opacity:.35; cursor:not-allowed; }
+  button:hover:not(:disabled){ opacity:.85; }
+
+  .stepper{
+    display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+    padding:10px 12px; background:#faf9f6; border:1px solid var(--line); border-radius:4px;
+    margin-bottom:14px;
+  }
+  .stepper .count{ font-family:var(--mono); font-size:12px; color:#6b6459; margin-left:4px; }
+
+  .caption{
+    font-family:var(--mono); font-size:12.5px; background:#faf9f6;
+    border:1px solid var(--line); border-left:3px solid var(--accent2);
+    border-radius:3px; padding:9px 12px; margin-bottom:16px; max-width:900px;
+  }
+
+  .flex-row{ display:flex; gap:28px; flex-wrap:wrap; align-items:flex-start; }
+
+  /* ---- editable matrix table ---- */
+  .edit-wrap{ overflow-x:auto; padding-bottom:6px; }
+  .edit-grid{ display:grid; gap:0; width:max-content; border:2px solid var(--ink); }
+  .edit-cell{
+    width:44px; height:34px; text-align:center; border:1px solid rgba(0,0,0,.15);
+    font-family:var(--mono); font-size:12px; padding:0;
+  }
+  .edit-cell:focus{ outline:2px solid var(--accent); outline-offset:-2px; }
+
+  /* ---- read-only matrix / segmentation grid ---- */
+  .grid-wrap{ overflow-x:auto; }
+  .matgrid{ display:grid; gap:0; border:2px solid var(--ink); width:max-content; }
+  .cell{
+    display:flex; align-items:center; justify-content:center;
+    font-family:var(--mono); border:1px solid rgba(0,0,0,.12); position:relative;
+  }
+  .cell.pending{ background:var(--pending) !important; background-image:repeating-linear-gradient(45deg, rgba(0,0,0,.05) 0 6px, transparent 6px 12px); color:#8a8378; }
+  .cell.b-top{ border-top:2.5px solid var(--ink); }
+  .cell.b-bottom{ border-bottom:2.5px solid var(--ink); }
+  .cell.b-left{ border-left:2.5px solid var(--ink); }
+  .cell.b-right{ border-right:2.5px solid var(--ink); }
+  .cell.just-active{ outline:2.5px solid var(--accent2); outline-offset:-2.5px; z-index:2; }
+  .cell.padcell{ box-shadow:inset 0 0 0 1.5px var(--pad); }
+  .cell.padcell::after{
+    content:'pad'; position:absolute; top:1px; right:2px;
+    font-size:6px; letter-spacing:.2px; color:var(--pad); font-family:var(--sans);
+  }
+
+  .grid-caption{ font-size:12px; color:#6b6459; margin-top:8px; max-width:460px; }
+
+  .tree-wrap{ overflow-x:auto; padding:10px 4px 20px; }
+  .tree, .tree ul, .tree li{ list-style:none; margin:0; padding:0; position:relative; }
+  .tree{ text-align:center; }
+  .tree ul{ display:flex; padding-top:26px; position:relative; }
+  .tree li{
+    flex:1; display:flex; flex-direction:column; align-items:center;
+    padding:26px 6px 0 6px; position:relative; min-width:78px;
+  }
+  .tree li::before, .tree li::after{
+    content:''; position:absolute; top:0; right:50%;
+    border-top:1.5px solid #a39a89; width:50%; height:26px;
+  }
+  .tree li::after{ right:auto; left:50%; border-left:1.5px solid #a39a89; }
+  .tree li:only-child::after, .tree li:only-child::before{ display:none; }
+  .tree li:first-child::before, .tree li:last-child::after{ border:0 none; }
+  .tree li:last-child::before{ border-right:1.5px solid #a39a89; border-radius:0 4px 0 0; }
+  .tree li:first-child::after{ border-radius:4px 0 0 0; }
+  .tree ul ul::before{
+    content:''; position:absolute; top:0; left:50%;
+    border-left:1.5px solid #a39a89; width:0; height:26px;
+  }
+  .node{
+    display:inline-block; border:1.5px solid var(--ink); border-radius:4px; background:#fff;
+    padding:5px 7px; font-family:var(--mono); font-size:10.5px; line-height:1.5; white-space:nowrap;
+  }
+  .node.split{ background:#fdece3; border-color:var(--accent2); }
+  .node.leaf{ background:#e7f2ea; border-color:var(--accent); }
+  .node.pending{ background:var(--pending); border:1.5px dashed #a39a89; color:#8a8378; }
+  .node.active{ box-shadow:0 0 0 2.5px var(--accent2); }
+  .node b{ font-size:10px; letter-spacing:.4px; }
+
+  .legend{ display:flex; gap:16px; font-size:12px; color:#4a4640; margin-bottom:10px; flex-wrap:wrap; }
+  .swatch{ display:inline-block; width:11px; height:11px; border-radius:2px; margin-right:5px; vertical-align:-1px; border:1px solid rgba(0,0,0,.3); }
+  .swatch.hatch{ background:var(--pending); background-image:repeating-linear-gradient(45deg, rgba(0,0,0,.15) 0 3px, transparent 3px 6px); }
+  .swatch.pad{ background:#fff; box-shadow:inset 0 0 0 1.5px var(--pad); }
+
+  .stat-line{ font-family:var(--mono); font-size:13px; margin:10px 0 4px; }
+  .log{
+    font-family:var(--mono); font-size:11.5px; color:#4a4640; background:#faf9f6;
+    border:1px solid var(--line); border-radius:3px; padding:10px 12px;
+    max-height:220px; overflow-y:auto; max-width:520px;
+  }
+  .log div{ margin-bottom:3px; }
+  .log div.current{ color:var(--accent2); font-weight:600; }
+  .placeholder{ color:#9a9284; font-size:13px; font-style:italic; }
+  .merge-cols{ display:flex; gap:36px; flex-wrap:wrap; }
+  .merge-col h3{ font-size:13px; margin:0 0 10px; font-family:var(--mono); }
+  .conn-choice{ display:flex; gap:8px; margin-bottom:10px; }
+  .conn-choice button.active{ background:var(--accent); border-color:var(--accent); }
+  .note{ font-size:12px; color:#4a4640; margin-top:8px; max-width:600px; }
+</style>
+</head>
+<body>
+
+<h1>Region Split &amp; Merge Segmentation &mdash; Step by Step</h1>
+<div class="sub">Edit your own matrix, then step through quadtree splitting and region merging. Homogeneity test: <span style="font-family:var(--mono)">max&minus;min &le; T</span>.</div>
+
+<div class="panel">
+  <h2><span class="n">1</span> Matrix &mdash; rows &times; columns</h2>
+  <div class="controls">
+    <label for="rowsInput">Rows</label>
+    <input type="number" id="rowsInput" value="8" min="1" max="16">
+    <label for="colsInput">Columns</label>
+    <input type="number" id="colsInput" value="8" min="1" max="16">
+    <button id="buildTable" class="secondary">Build table</button>
+    <button id="applyMatrix">Apply matrix</button>
+  </div>
+  <div class="edit-wrap"><div id="matrixEditor"></div></div>
+  <div class="note" id="matrixNote"></div>
+</div>
+
+<div class="panel">
+  <h2><span class="n">2</span> Threshold &amp; simulation source</h2>
+  <div class="controls">
+    <label for="thresh">Threshold T</label>
+    <input type="number" id="thresh" value="20" min="1" max="255">
+    <button id="initSim">Initialize simulation</button>
+    <button id="resetAll" class="ghost">Reset everything</button>
+  </div>
+  <div id="sourceGrid"></div>
+  <div class="legend" style="margin-top:8px">
+    <span><span class="swatch pad"></span>zero-padded cell (added to reach a square power-of-2 size)</span>
+  </div>
+  <div class="grid-caption">This is the padded region the algorithm actually runs on, before any evaluation.</div>
+</div>
+
+<div class="panel" id="splitPanel">
+  <h2><span class="n">3</span> Split &mdash; step by step</h2>
+  <div id="splitStepper" class="stepper" style="display:none">
+    <button id="splitPrev" class="secondary">&larr; Prev</button>
+    <button id="splitNext">Next step &rarr;</button>
+    <button id="splitPlay">Play</button>
+    <button id="splitEnd" class="secondary">Skip to end</button>
+    <span class="count" id="splitCount"></span>
+  </div>
+  <div id="splitCaption"></div>
+  <div id="splitContent"><div class="placeholder">Click "Initialize simulation" above, then step through the split with the controls that appear here.</div></div>
+</div>
+
+<div class="panel" id="mergePanel">
+  <h2><span class="n">4</span> Merge &mdash; step by step</h2>
+  <div id="mergeChoice" class="conn-choice" style="display:none">
+    <button id="chooseConn4" class="secondary">Simulate 4&#8209;connected merge</button>
+    <button id="chooseConn8" class="secondary">Simulate 8&#8209;connected merge</button>
+  </div>
+  <div id="mergeStepper" class="stepper" style="display:none">
+    <button id="mergePrev" class="secondary">&larr; Prev</button>
+    <button id="mergeNext">Next step &rarr;</button>
+    <button id="mergePlay">Play</button>
+    <button id="mergeEnd" class="secondary">Skip to end</button>
+    <span class="count" id="mergeCount"></span>
+  </div>
+  <div id="mergeCaption"></div>
+  <div id="mergeContent"><div class="placeholder">Finish stepping through the split (reach the end) to unlock merge simulation.</div></div>
+</div>
+
+<script>
+// ---------------------------------------------------------------
+// Default sample matrix (from the notebook page), used to prefill
+// the editable table the first time it is built at 8x8.
+// ---------------------------------------------------------------
+const SAMPLE_8x8 = [
+  [35,55,60,21,58,86,55,3],
+  [58,100,16,75,15,45,9,35],
+  [80,65,85,18,70,20,39,11],
+  [62,90,19,140,142,2,3,5],
+  [1,3,145,89,110,137,66,7],
+  [9,5,143,129,109,135,76,11],
+  [176,55,165,132,144,250,230,86],
+  [65,185,75,170,251,0,30,245]
+];
+const MAX_DIM = 16;
+
+let ORIG_ROWS = 8, ORIG_COLS = 8;
+let rawValues = SAMPLE_8x8.map(row=>row.slice());
+let matrix = null;   // padded, square, power-of-2 sized
+let N = 8;            // padded size
+let threshold = 20;
+
+let root = null;
+let splitEvents = [];
+let splitLeaves = [];
+let cellLeafIndex = null;
+
+let splitStep = 0;
+let splitTimer = null;
+
+let mergeOps = [];
+let mergeStep = 0;
+let mergeTimer = null;
+let mergeConn = null;
+
+function clamp(v,lo,hi){ return Math.max(lo, Math.min(hi, v)); }
+function nextPow2Capped(x){
+  let p = 1;
+  while(p < x) p *= 2;
+  return Math.min(p, MAX_DIM);
+}
+function isPad(r,c){ return r>=ORIG_ROWS || c>=ORIG_COLS; }
+function gridMetrics(n){
+  if(n<=8)  return { cell:46, font:12 };
+  if(n<=10) return { cell:40, font:11 };
+  if(n<=12) return { cell:34, font:10 };
+  return { cell:28, font:9 };
+}
+
+// ---------- palette ----------
+function colorForIndex(i){
+  const hues = [4,24,44,90,150,190,210,250,280,320,350,15,55,120,170,230,300,340,70,200];
+  const h = hues[i % hues.length];
+  const light = 78 - Math.floor(i / hues.length) * 8;
+  return `hsl(${h} 62% ${Math.max(light,40)}%)`;
+}
+
+// ================= MATRIX EDITOR =================
+
+function buildEditableTable(rows, cols){
+  const container = document.getElementById('matrixEditor');
+  container.innerHTML = '';
+  const table = document.createElement('div');
+  table.className = 'edit-grid';
+  table.style.gridTemplateColumns = `repeat(${cols}, 44px)`;
+  for(let r=0;r<rows;r++){
+    for(let c=0;c<cols;c++){
+      const inp = document.createElement('input');
+      inp.type = 'number';
+      inp.className = 'edit-cell';
+      inp.dataset.r = r;
+      inp.dataset.c = c;
+      inp.value = (rawValues[r] && rawValues[r][c] !== undefined) ? rawValues[r][c] : 0;
+      table.appendChild(inp);
+    }
+  }
+  container.appendChild(table);
+}
+
+document.getElementById('buildTable').addEventListener('click', ()=>{
+  const rows = clamp(parseInt(document.getElementById('rowsInput').value,10) || 1, 1, MAX_DIM);
+  const cols = clamp(parseInt(document.getElementById('colsInput').value,10) || 1, 1, MAX_DIM);
+  document.getElementById('rowsInput').value = rows;
+  document.getElementById('colsInput').value = cols;
+  const newRaw = Array.from({length:rows}, (_,r)=>
+    Array.from({length:cols}, (_,c)=> (rawValues[r] && rawValues[r][c]!==undefined) ? rawValues[r][c] : 0)
+  );
+  ORIG_ROWS = rows; ORIG_COLS = cols;
+  rawValues = newRaw;
+  buildEditableTable(rows, cols);
+});
+
+function readTableIntoRawValues(){
+  document.querySelectorAll('.edit-cell').forEach(inp=>{
+    const r = +inp.dataset.r, c = +inp.dataset.c;
+    let v = parseInt(inp.value, 10);
+    if(isNaN(v)) v = 0;
+    rawValues[r][c] = v;
+  });
+}
+
+function applyMatrix(){
+  readTableIntoRawValues();
+  const size = nextPow2Capped(Math.max(ORIG_ROWS, ORIG_COLS));
+  const m = Array.from({length:size}, ()=> new Array(size).fill(0));
+  for(let r=0;r<ORIG_ROWS;r++) for(let c=0;c<ORIG_COLS;c++) m[r][c] = rawValues[r][c];
+  matrix = m; N = size;
+
+  const note = document.getElementById('matrixNote');
+  if(ORIG_ROWS===size && ORIG_COLS===size){
+    note.textContent = `Using the full ${size}\u00d7${size} matrix \u2014 no padding needed.`;
+  } else {
+    note.textContent = `Your ${ORIG_ROWS}\u00d7${ORIG_COLS} matrix was zero-padded to ${size}\u00d7${size} `+
+      `(rows ${ORIG_ROWS}\u2192${size}, columns ${ORIG_COLS}\u2192${size}) so quadtree splitting has a square, power-of-2 region to work with.`;
+  }
+
+  renderSourceGrid();
+  resetSplitMergeUI();
+}
+document.getElementById('applyMatrix').addEventListener('click', applyMatrix);
+
+// ================= SOURCE / SEGMENTATION GRID RENDERING =================
+
+function makeGridContainer(){
+  const wrap = document.createElement('div');
+  wrap.className = 'grid-wrap';
+  return wrap;
+}
+
+function renderSourceGrid(){
+  const el = document.getElementById('sourceGrid');
+  const { cell, font } = gridMetrics(N);
+  const g = document.createElement('div');
+  g.className = 'matgrid';
+  g.style.gridTemplateColumns = `repeat(${N}, ${cell}px)`;
+  g.style.gridTemplateRows = `repeat(${N}, ${cell}px)`;
+  for(let r=0;r<N;r++){
+    for(let c=0;c<N;c++){
+      const d = document.createElement('div');
+      d.className = 'cell';
+      d.style.background = '#fbfaf7';
+      d.style.fontSize = font+'px';
+      d.textContent = matrix[r][c];
+      if(isPad(r,c)) d.classList.add('padcell');
+      g.appendChild(d);
+    }
+  }
+  const wrap = makeGridContainer();
+  wrap.appendChild(g);
+  el.innerHTML = '';
+  el.appendChild(wrap);
+}
+
+// generic renderer for segmentation states (split / merge)
+function renderGrid(container, idGrid, colorFn, pendingFn, activeFn){
+  const { cell, font } = gridMetrics(N);
+  const g = document.createElement('div');
+  g.className = 'matgrid';
+  g.style.gridTemplateColumns = `repeat(${N}, ${cell}px)`;
+  g.style.gridTemplateRows = `repeat(${N}, ${cell}px)`;
+  for(let r=0;r<N;r++){
+    for(let c=0;c<N;c++){
+      const d = document.createElement('div');
+      const id = idGrid[r][c];
+      d.className = 'cell';
+      d.style.fontSize = font+'px';
+      if(pendingFn(id)){
+        d.classList.add('pending');
+      } else {
+        d.style.background = colorFn(id);
+      }
+      if(activeFn && activeFn(id)) d.classList.add('just-active');
+      if(isPad(r,c)) d.classList.add('padcell');
+      d.textContent = matrix[r][c];
+      const up    = r>0 ? idGrid[r-1][c] : Symbol();
+      const down  = r<N-1 ? idGrid[r+1][c] : Symbol();
+      const left  = c>0 ? idGrid[r][c-1] : Symbol();
+      const right = c<N-1 ? idGrid[r][c+1] : Symbol();
+      if(up!==id) d.classList.add('b-top');
+      if(down!==id) d.classList.add('b-bottom');
+      if(left!==id) d.classList.add('b-left');
+      if(right!==id) d.classList.add('b-right');
+      g.appendChild(d);
+    }
+  }
+  const wrap = makeGridContainer();
+  wrap.appendChild(g);
+  container.innerHTML = '';
+  container.appendChild(wrap);
+}
+
+// ================= QUADTREE SPLIT =================
+
+function buildQuadtree(x0,y0,size,path){
+  const cells = [];
+  for(let r=y0;r<y0+size;r++) for(let c=x0;c<x0+size;c++) cells.push([r,c]);
+  let max=-Infinity, min=Infinity;
+  cells.forEach(([r,c])=>{ const v=matrix[r][c]; if(v>max)max=v; if(v<min)min=v; });
+  const node = { path, x0,y0,size, max, min, diff:max-min, cells, children:null };
+  if(size>1 && (max-min) > threshold){
+    const h = size/2;
+    node.children = [
+      buildQuadtree(x0,   y0,   h, path+'0'),
+      buildQuadtree(x0+h, y0,   h, path+'1'),
+      buildQuadtree(x0,   y0+h, h, path+'2'),
+      buildQuadtree(x0+h, y0+h, h, path+'3')
+    ];
+  }
+  return node;
+}
+
+function bfsOrder(r){
+  const order = []; const q = [r];
+  while(q.length){ const nd=q.shift(); order.push(nd); if(nd.children) q.push(...nd.children); }
+  return order;
+}
+
+function currentBlockFor(r,c,processedSet){
+  let node = root;
+  while(processedSet.has(node.path) && node.children){
+    node = node.children.find(ch => r>=ch.y0 && r<ch.y0+ch.size && c>=ch.x0 && c<ch.x0+ch.size);
+  }
+  return node;
+}
+
+function renderTreeHTML(node, processedSet, activePath){
+  const isProcessed = processedSet.has(node.path);
+  const isActive = node.path === activePath;
+  if(!isProcessed){
+    return `<li><div class="node pending${isActive?' active':''}">(${node.x0},${node.y0}) ${node.size}\u00d7${node.size}<br><b>PENDING</b></div></li>`;
+  }
+  const cls = node.children ? 'split' : 'leaf';
+  let html = `<li><div class="node ${cls}${isActive?' active':''}">`+
+             `(${node.x0},${node.y0}) ${node.size}\u00d7${node.size}<br>`+
+             `max ${node.max} &middot; min ${node.min}<br>`+
+             `&Delta; ${node.diff}<br><b>${node.children?'SPLIT':'LEAF'}</b></div>`;
+  if(node.children){
+    html += '<ul>' + node.children.map(ch=>renderTreeHTML(ch,processedSet,activePath)).join('') + '</ul>';
+  }
+  html += '</li>';
+  return html;
+}
+
+function renderSplitAtStep(step){
+  const processedSet = new Set(splitEvents.slice(0,step).map(n=>n.path));
+  const activeNode = step>0 ? splitEvents[step-1] : null;
+
+  const blockGrid = Array.from({length:N},()=>new Array(N));
+  for(let r=0;r<N;r++) for(let c=0;c<N;c++) blockGrid[r][c] = currentBlockFor(r,c,processedSet);
+  const idGrid = blockGrid.map(row=>row.map(nd=>nd.path));
+
+  const leafColorMap = new Map();
+  splitLeaves.forEach((nd,i)=>leafColorMap.set(nd.path,i));
+
+  const content = document.getElementById('splitContent');
+  content.innerHTML = '';
+  const row = document.createElement('div');
+  row.className = 'flex-row';
+
+  const gridCol = document.createElement('div');
+  const revealedLeaves = [...processedSet].filter(p=>{
+    const nd = splitEvents.find(e=>e.path===p);
+    return nd && !nd.children;
+  }).length;
+  gridCol.innerHTML = `<div class="stat-line">T = ${threshold} &nbsp;&middot;&nbsp; nodes evaluated: ${step}/${splitEvents.length} &nbsp;&middot;&nbsp; leaf regions finalized: ${revealedLeaves}</div>`;
+  const gridHolder = document.createElement('div');
+  gridCol.appendChild(gridHolder);
+  renderGrid(
+    gridHolder,
+    idGrid,
+    (path)=>colorForIndex(leafColorMap.get(path)),
+    (path)=>!processedSet.has(path),
+    (path)=> activeNode && path===activeNode.path
+  );
+  const legend = document.createElement('div');
+  legend.className = 'legend';
+  legend.innerHTML = `<span><span class="swatch hatch"></span>pending (not yet evaluated)</span><span><span class="swatch" style="background:#8fbf9e"></span>finalized leaf</span><span><span class="swatch pad"></span>zero-padded cell</span>`;
+  gridCol.appendChild(legend);
+
+  const treeCol = document.createElement('div');
+  treeCol.style.flex = '1';
+  treeCol.style.minWidth = '420px';
+  treeCol.innerHTML = `<div class="stat-line" style="margin-bottom:2px">Split tree (grows as nodes are evaluated)</div>
+    <div class="legend">
+      <span><span class="swatch" style="background:#fdece3;border-color:#b3532b"></span>split (&Delta; &gt; T)</span>
+      <span><span class="swatch" style="background:#e7f2ea;border-color:#2f6f5e"></span>leaf (&Delta; &le; T or 1&times;1)</span>
+      <span><span class="swatch" style="background:#eceae4;border-color:#a39a89"></span>pending</span>
+    </div>`;
+  const treeWrap = document.createElement('div');
+  treeWrap.className = 'tree-wrap';
+  treeWrap.innerHTML = `<ul class="tree">${renderTreeHTML(root, processedSet, activeNode?activeNode.path:null)}</ul>`;
+  treeCol.appendChild(treeWrap);
+
+  row.appendChild(gridCol);
+  row.appendChild(treeCol);
+  content.appendChild(row);
+
+  const capEl = document.getElementById('splitCaption');
+  if(step===0){
+    capEl.innerHTML = `<div class="caption">Ready. The whole ${N}\u00d7${N} region is one pending block. Click <b>Next step</b> to evaluate it.</div>`;
+  } else if(activeNode){
+    const decision = activeNode.children
+      ? `\u0394 = ${activeNode.diff} &gt; T = ${threshold} \u2192 <b>SPLIT</b> into 4 quadrants of size ${activeNode.size/2}\u00d7${activeNode.size/2}`
+      : `\u0394 = ${activeNode.diff} ${activeNode.size===1?'(single pixel)':`\u2264 T = ${threshold}`} \u2192 <b>LEAF</b>, kept as one region`;
+    capEl.innerHTML = `<div class="caption">Step ${step}/${splitEvents.length} &mdash; evaluating block (${activeNode.x0},${activeNode.y0}) size ${activeNode.size}\u00d7${activeNode.size}: max ${activeNode.max}, min ${activeNode.min} &rarr; ${decision}</div>`;
+  }
+  if(step===splitEvents.length){
+    capEl.innerHTML += `<div class="caption" style="border-left-color:var(--accent)">Split complete &mdash; ${splitLeaves.length} leaf regions. Choose a connectivity rule in section 4 to begin merging.</div>`;
+  }
+
+  document.getElementById('splitCount').textContent = `${step} / ${splitEvents.length}`;
+  document.getElementById('splitPrev').disabled = step===0;
+  document.getElementById('splitNext').disabled = step===splitEvents.length;
+  document.getElementById('splitEnd').disabled = step===splitEvents.length;
+
+  const done = step===splitEvents.length;
+  document.getElementById('mergeChoice').style.display = done ? 'flex' : 'none';
+  if(!done){
+    document.getElementById('mergeStepper').style.display='none';
+    document.getElementById('mergeCaption').innerHTML='';
+    document.getElementById('mergeContent').innerHTML = '<div class="placeholder">Finish stepping through the split (reach the end) to unlock merge simulation.</div>';
+    mergeOps = []; mergeStep = 0; mergeConn = null;
+    stopMergePlay();
+  }
+}
+
+function splitGoTo(step){
+  splitStep = clamp(step, 0, splitEvents.length);
+  renderSplitAtStep(splitStep);
+}
+
+document.getElementById('initSim').addEventListener('click', ()=>{
+  if(!matrix){ applyMatrix(); }
+  threshold = parseInt(document.getElementById('thresh').value,10) || 20;
+  root = buildQuadtree(0,0,N,'n');
+  splitEvents = bfsOrder(root);
+  splitLeaves = splitEvents.filter(nd=>!nd.children);
+  // raster-scan order (row by row, left to right) so merging is examined
+  // starting from the top-left region (0,0) onward
+  splitLeaves.sort((a,b)=> (a.y0-b.y0) || (a.x0-b.x0));
+  cellLeafIndex = Array.from({length:N},()=>new Array(N));
+  splitLeaves.forEach((leaf,i)=>{ leaf.cells.forEach(([r,c])=>{ cellLeafIndex[r][c]=i; }); });
+
+  splitStep = 0;
+  stopSplitPlay();
+  document.getElementById('splitStepper').style.display = 'flex';
+  splitGoTo(0);
+});
+
+document.getElementById('splitPrev').addEventListener('click', ()=>{ stopSplitPlay(); splitGoTo(splitStep-1); });
+document.getElementById('splitNext').addEventListener('click', ()=>{ stopSplitPlay(); splitGoTo(splitStep+1); });
+document.getElementById('splitEnd').addEventListener('click', ()=>{ stopSplitPlay(); splitGoTo(splitEvents.length); });
+
+function stopSplitPlay(){
+  if(splitTimer){ clearInterval(splitTimer); splitTimer=null; }
+  document.getElementById('splitPlay').textContent = 'Play';
+}
+document.getElementById('splitPlay').addEventListener('click', ()=>{
+  if(splitTimer){ stopSplitPlay(); return; }
+  document.getElementById('splitPlay').textContent = 'Pause';
+  splitTimer = setInterval(()=>{
+    if(splitStep>=splitEvents.length){ stopSplitPlay(); return; }
+    splitGoTo(splitStep+1);
+  }, 550);
+});
+
+// ================= MERGE =================
+
+function regionsAdjacent(a, b, conn){
+  for(const [r,c] of a.cells){
+    for(const [r2,c2] of b.cells){
+      const dr = Math.abs(r-r2), dc = Math.abs(c-c2);
+      if(conn===4){ if(dr+dc===1) return true; }
+      else { if(dr<=1 && dc<=1 && !(dr===0 && dc===0)) return true; }
+    }
+  }
+  return false;
+}
+
+function computeMergeOps(conn){
+  let regions = splitLeaves.map((l,i)=>({ id:i, cells:l.cells.slice(), max:l.max, min:l.min, members:[i] }));
+  const ops = [];
+  let changed = true;
+  while(changed){
+    changed = false;
+    outer:
+    for(let i=0;i<regions.length;i++){
+      for(let j=i+1;j<regions.length;j++){
+        if(regionsAdjacent(regions[i], regions[j], conn)){
+          const cells = regions[i].cells.concat(regions[j].cells);
+          let max=-Infinity, min=Infinity;
+          cells.forEach(([r,c])=>{ const v=matrix[r][c]; if(v>max)max=v; if(v<min)min=v; });
+          if(max-min<=threshold){
+            ops.push({ aMembers:regions[i].members.slice(), bMembers:regions[j].members.slice(), max, min, diff:max-min });
+            regions[i] = { id:regions[i].id, cells, max, min, members:regions[i].members.concat(regions[j].members) };
+            regions.splice(j,1);
+            changed = true;
+            break outer;
+          }
+        }
+      }
+    }
+  }
+  return { ops, finalCount: regions.length };
+}
+
+function renderMergeAtStep(step){
+  const groupOf = new Array(splitLeaves.length);
+  for(let i=0;i<splitLeaves.length;i++) groupOf[i]=i;
+  for(let k=0;k<step;k++){
+    const op = mergeOps[k];
+    const target = groupOf[op.aMembers[0]];
+    op.bMembers.forEach(m=>{ groupOf[m]=target; });
+  }
+
+  const idGrid = Array.from({length:N},()=>new Array(N));
+  for(let r=0;r<N;r++) for(let c=0;c<N;c++) idGrid[r][c] = groupOf[cellLeafIndex[r][c]];
+
+  const activeOp = step>0 ? mergeOps[step-1] : null;
+  const activeSet = activeOp ? new Set(activeOp.aMembers.concat(activeOp.bMembers).map(m=>groupOf[m])) : null;
+
+  const groupsNow = new Set(groupOf).size;
+
+  const content = document.getElementById('mergeContent');
+  content.innerHTML = '';
+  const wrap = document.createElement('div');
+  wrap.className = 'merge-col';
+  wrap.innerHTML = `<h3>${mergeConn}-connected merge</h3><div class="stat-line">${splitLeaves.length} leaf regions &rarr; ${groupsNow} region(s) so far</div>`;
+  const gridHolder = document.createElement('div');
+  wrap.appendChild(gridHolder);
+  renderGrid(
+    gridHolder,
+    idGrid,
+    (id)=>colorForIndex(id),
+    ()=>false,
+    (id)=> activeSet && activeSet.has(id)
+  );
+
+  const logHolder = document.createElement('div');
+  logHolder.className = 'log';
+  logHolder.style.marginTop = '10px';
+  if(mergeOps.length===0){
+    logHolder.innerHTML = '<div>No adjacent leaf regions satisfy the merge test under this connectivity \u2014 result equals the split.</div>';
+  } else {
+    logHolder.innerHTML = mergeOps.map((op,i)=>{
+      const cls = i===step-1 ? 'current' : '';
+      return `<div class="${cls}">${i+1}. group{${op.aMembers.join(',')}} + group{${op.bMembers.join(',')}} \u2192 max ${op.max}, min ${op.min}, \u0394 ${op.diff}</div>`;
+    }).join('');
+  }
+  wrap.appendChild(logHolder);
+  content.appendChild(wrap);
+
+  const capEl = document.getElementById('mergeCaption');
+  if(mergeOps.length===0){
+    capEl.innerHTML = `<div class="caption">No merges are possible under ${mergeConn}-connectivity at T=${threshold}: every pair of adjacent leaf regions already differs by more than T.</div>`;
+  } else if(step===0){
+    capEl.innerHTML = `<div class="caption">Ready. ${splitLeaves.length} split leaf regions, none merged yet. Click <b>Next step</b> to try the first merge.</div>`;
+  } else {
+    const op = mergeOps[step-1];
+    capEl.innerHTML = `<div class="caption">Step ${step}/${mergeOps.length} &mdash; region {${op.aMembers.join(',')}} and region {${op.bMembers.join(',')}} are ${mergeConn}-connected; combined max ${op.max}, min ${op.min}, \u0394 ${op.diff} \u2264 T=${threshold} &rarr; <b>MERGED</b></div>`;
+    if(step===mergeOps.length){
+      capEl.innerHTML += `<div class="caption" style="border-left-color:var(--accent)">Merge complete &mdash; ${groupsNow} final region(s) under ${mergeConn}-connectivity.</div>`;
+    }
+  }
+
+  document.getElementById('mergeCount').textContent = `${step} / ${mergeOps.length}`;
+  document.getElementById('mergePrev').disabled = step===0;
+  document.getElementById('mergeNext').disabled = step===mergeOps.length;
+  document.getElementById('mergeEnd').disabled = step===mergeOps.length;
+}
+
+function mergeGoTo(step){
+  mergeStep = clamp(step, 0, mergeOps.length);
+  renderMergeAtStep(mergeStep);
+}
+
+function startMergeSim(conn){
+  stopMergePlay();
+  mergeConn = conn;
+  const res = computeMergeOps(conn);
+  mergeOps = res.ops;
+  mergeStep = 0;
+  document.getElementById('chooseConn4').classList.toggle('active', conn===4);
+  document.getElementById('chooseConn8').classList.toggle('active', conn===8);
+  document.getElementById('mergeStepper').style.display = 'flex';
+  mergeGoTo(0);
+}
+document.getElementById('chooseConn4').addEventListener('click', ()=>startMergeSim(4));
+document.getElementById('chooseConn8').addEventListener('click', ()=>startMergeSim(8));
+
+document.getElementById('mergePrev').addEventListener('click', ()=>{ stopMergePlay(); mergeGoTo(mergeStep-1); });
+document.getElementById('mergeNext').addEventListener('click', ()=>{ stopMergePlay(); mergeGoTo(mergeStep+1); });
+document.getElementById('mergeEnd').addEventListener('click', ()=>{ stopMergePlay(); mergeGoTo(mergeOps.length); });
+
+function stopMergePlay(){
+  if(mergeTimer){ clearInterval(mergeTimer); mergeTimer=null; }
+  document.getElementById('mergePlay').textContent = 'Play';
+}
+document.getElementById('mergePlay').addEventListener('click', ()=>{
+  if(mergeTimer){ stopMergePlay(); return; }
+  document.getElementById('mergePlay').textContent = 'Pause';
+  mergeTimer = setInterval(()=>{
+    if(mergeStep>=mergeOps.length){ stopMergePlay(); return; }
+    mergeGoTo(mergeStep+1);
+  }, 550);
+});
+
+// ================= RESET =================
+
+function resetSplitMergeUI(){
+  stopSplitPlay(); stopMergePlay();
+  root=null; splitEvents=[]; splitLeaves=[]; cellLeafIndex=null; splitStep=0;
+  mergeOps=[]; mergeStep=0; mergeConn=null;
+  document.getElementById('splitStepper').style.display='none';
+  document.getElementById('splitCaption').innerHTML='';
+  document.getElementById('splitContent').innerHTML = '<div class="placeholder">Click "Initialize simulation" above, then step through the split with the controls that appear here.</div>';
+  document.getElementById('mergeChoice').style.display='none';
+  document.getElementById('mergeStepper').style.display='none';
+  document.getElementById('mergeCaption').innerHTML='';
+  document.getElementById('mergeContent').innerHTML = '<div class="placeholder">Finish stepping through the split (reach the end) to unlock merge simulation.</div>';
+}
+
+document.getElementById('resetAll').addEventListener('click', ()=>{
+  document.getElementById('rowsInput').value = 8;
+  document.getElementById('colsInput').value = 8;
+  document.getElementById('thresh').value = 20;
+  ORIG_ROWS = 8; ORIG_COLS = 8;
+  rawValues = SAMPLE_8x8.map(row=>row.slice());
+  buildEditableTable(8,8);
+  applyMatrix();
+});
+
+// ---------------------------------------------------------------
+// initial load: 8x8 editable table prefilled with the sample matrix
+// ---------------------------------------------------------------
+buildEditableTable(ORIG_ROWS, ORIG_COLS);
+applyMatrix();
+</script>
+
+</body>
+</html>

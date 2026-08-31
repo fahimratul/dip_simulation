@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Morphological Image Processing Simulator</title>
+<style>
+  :root{
+    --bg:#0f1420; --panel:#161d2e; --panel2:#1c2540; --accent:#5eb3ff; --accent2:#ff8a5e;
+    --text:#e7ecf7; --muted:#8b96b3; --cell0:#1c2540; --cell1:#5eb3ff; --pad:#2a3350;
+    --erode:#ff6b81; --dilate:#5eff9c; --window:#ffd166;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; font-family:'Segoe UI',Roboto,Arial,sans-serif; background:linear-gradient(160deg,#0b0f1a,#141b2e);
+    color:var(--text); padding:24px; line-height:1.5;
+  }
+  h1{font-size:1.5rem; margin-bottom:4px;}
+  h2{font-size:1.05rem; color:var(--accent); border-bottom:1px solid #2a3350; padding-bottom:6px; margin-top:0;}
+  .subtitle{color:var(--muted); margin-top:0; margin-bottom:24px; font-size:.92rem;}
+  .container{max-width:1200px; margin:0 auto;}
+  .panel{
+    background:var(--panel); border:1px solid #26304a; border-radius:14px; padding:20px;
+    margin-bottom:20px; box-shadow:0 4px 18px rgba(0,0,0,.25);
+  }
+  .row{display:flex; flex-wrap:wrap; gap:20px; align-items:flex-start;}
+  label{font-size:.85rem; color:var(--muted); display:block; margin-bottom:4px;}
+  input[type=number]{
+    width:70px; padding:6px 8px; border-radius:8px; border:1px solid #33405f; background:#0f1424; color:var(--text);
+  }
+  select{
+    padding:6px 8px; border-radius:8px; border:1px solid #33405f; background:#0f1424; color:var(--text);
+  }
+  .field{margin-bottom:10px;}
+  button{
+    background:linear-gradient(135deg,var(--accent),#3d84c9); border:none; color:#08111f; font-weight:600;
+    padding:9px 16px; border-radius:9px; cursor:pointer; font-size:.88rem; transition:transform .1s, opacity .15s;
+  }
+  button:hover{transform:translateY(-1px);}
+  button:disabled{opacity:.35; cursor:not-allowed; transform:none;}
+  button.secondary{background:linear-gradient(135deg,#3a4568,#293252); color:var(--text);}
+  button.ghost{background:transparent; border:1px solid #33405f; color:var(--text);}
+  .btnbar{display:flex; gap:10px; flex-wrap:wrap; margin-top:12px;}
+  .grid-wrap{overflow:auto; padding:6px;}
+  .grid{display:inline-grid; gap:3px; }
+  .cell{
+    width:38px; height:38px; display:flex; align-items:center; justify-content:center;
+    font-size:.8rem; font-weight:700; border-radius:6px; cursor:pointer; user-select:none;
+    background:var(--cell0); color:var(--muted); border:1px solid #2c3654; transition:.12s;
+  }
+  .cell.on{background:var(--cell1); color:#05121f;}
+  .cell:hover{outline:2px solid var(--accent);}
+  .kcell{width:38px;height:38px;cursor:pointer;}
+  .kcell.origin{box-shadow:inset 0 0 0 3px var(--accent2);}
+  .padcell{background:repeating-linear-gradient(45deg,#151b2c,#151b2c 5px,#1b2338 5px,#1b2338 10px); color:#4a5578; border:1px dashed #3a4568; cursor:default;}
+  .padcell.on{background:repeating-linear-gradient(45deg,#233457,#233457 5px,#2a3d63 5px,#2a3d63 10px); color:#7fb3ff;}
+  .window-hl{outline:3px solid var(--window)!important; z-index:2;}
+  .kernel-active{box-shadow:inset 0 0 0 3px rgba(255,209,102,.8)!important;}
+  .origin-hl{outline:3px solid var(--accent2)!important; background:var(--accent2)!important; color:#2a0f02!important; z-index:3; box-shadow:0 0 8px rgba(255,138,94,.7)!important;}
+  .legend{display:flex; gap:18px; flex-wrap:wrap; font-size:.8rem; color:var(--muted); margin-top:10px;}
+  .swatch{display:inline-block; width:14px; height:14px; border-radius:4px; vertical-align:middle; margin-right:6px;}
+  .stepbox{
+    background:var(--panel2); border-radius:12px; padding:16px; margin-top:16px; border:1px solid #2a3350;
+  }
+  .stepbox h3{margin:0 0 10px 0; font-size:.95rem; color:var(--accent2);}
+  .readout{font-size:.85rem; color:var(--text); background:#0f1424; padding:10px 12px; border-radius:8px; border:1px solid #26304a;}
+  .readout b{color:var(--accent);}
+  .two-col{display:grid; grid-template-columns:1fr 1fr; gap:20px;}
+  @media(max-width:900px){.two-col{grid-template-columns:1fr;}}
+  .out-cell{width:38px;height:38px;}
+  .hidden{display:none!important;}
+  .stepnum{font-weight:700; color:var(--window);}
+  .progress{height:6px; background:#0f1424; border-radius:4px; overflow:hidden; margin:10px 0;}
+  .progress > div{height:100%; background:linear-gradient(90deg,var(--accent),var(--accent2)); width:0%; transition:.2s;}
+  .note{font-size:.78rem; color:var(--muted); margin-top:8px;}
+  .flex-center{display:flex; align-items:center; gap:10px;}
+  .badge{font-size:.7rem; padding:2px 8px; border-radius:20px; background:#26304a; color:var(--muted);}
+  .fhm-badge{display:inline-block; font-weight:800; letter-spacing:.5px; padding:4px 12px; border-radius:8px; font-size:.85rem; margin-bottom:6px;}
+  .fhm-fit{background:rgba(94,255,156,.18); color:var(--dilate); border:1px solid var(--dilate);}
+  .fhm-hit{background:rgba(255,209,102,.18); color:var(--window); border:1px solid var(--window);}
+  .fhm-miss{background:rgba(255,107,129,.18); color:var(--erode); border:1px solid var(--erode);}
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🔬 Morphological Image Processing Simulator</h1>
+  <p class="subtitle">Build a binary image matrix, define a structuring element (kernel), watch zero-padding get applied, then step through Erosion and Dilation cell by cell.</p>
+
+  <!-- STEP 1: MATRIX -->
+  <div class="panel" id="panel-matrix">
+    <h2>Step 1 — Define the Image Matrix</h2>
+    <div class="row">
+      <div class="field"><label>Rows</label><input type="number" id="rows" min="1" max="15" value="6"></div>
+      <div class="field"><label>Columns</label><input type="number" id="cols" min="1" max="15" value="6"></div>
+      <div class="field" style="align-self:flex-end;"><button onclick="generateMatrix()">Generate Matrix</button></div>
+      <div class="field" style="align-self:flex-end;"><button class="secondary" onclick="randomizeMatrix()">Randomize (binary)</button></div>
+    </div>
+    <p class="note">Click cells below to toggle between 0 (background) and 1 (foreground/object).</p>
+    <div class="grid-wrap"><div class="grid" id="matrixGrid"></div></div>
+  </div>
+
+  <!-- STEP 2: KERNEL -->
+  <div class="panel" id="panel-kernel">
+    <h2>Step 2 — Define the Kernel / Structuring Element</h2>
+    <div class="row">
+      <div class="field"><label>Kernel Rows</label><input type="number" id="krows" min="1" max="7" value="3"></div>
+      <div class="field"><label>Kernel Cols</label><input type="number" id="kcols" min="1" max="7" value="3"></div>
+      <div class="field"><label>Origin (anchor)</label>
+        <select id="korigin">
+          <option value="center" selected>Center — floor((n+1)/2)</option>
+          <option value="custom">Custom (click a kernel cell to set)</option>
+        </select>
+      </div>
+      <div class="field" style="align-self:flex-end;"><button onclick="generateKernel()">Generate Kernel</button></div>
+      <div class="field" style="align-self:flex-end;"><button class="secondary" onclick="fillKernelOnes()">Fill all 1s</button></div>
+    </div>
+    <p class="note">Click cells to toggle 0/1. The <span style="color:var(--accent2);font-weight:700;">orange-bordered</span> cell is the origin/anchor point of the kernel. If "Custom" is selected, click a cell once to set it as origin.<br>
+    Default origin index (1-indexed) = floor((n+1)/2) along each dimension &mdash; e.g. n=2 → floor(1.5)=1, n=3 → floor(2)=2, n=4 → floor(2.5)=2.</p>
+    <div class="grid-wrap"><div class="grid" id="kernelGrid"></div></div>
+  </div>
+
+  <!-- STEP 3: PADDING -->
+  <div class="panel" id="panel-pad">
+    <h2>Step 3 — Zero Padding</h2>
+    <p class="note">Padding is derived from the kernel size and origin so every kernel position — including at the image borders — has a full neighborhood. Padded (border) cells are shown with a hatched pattern.</p>
+    <div class="btnbar">
+      <button onclick="applyPadding()">Apply Zero Padding</button>
+    </div>
+    <div class="grid-wrap" style="margin-top:14px;"><div class="grid" id="paddedGrid"></div></div>
+    <div class="legend" id="padLegend"></div>
+  </div>
+
+  <!-- STEP 4: STEP-BY-STEP SIMULATION -->
+  <div class="panel" id="panel-sim">
+    <h2>Step 4 — Step-by-Step Erosion & Dilation</h2>
+    <div class="row" style="margin-bottom:6px;">
+      <div class="field">
+        <label>Which operation do you want to see?</label>
+        <div class="flex-center">
+          <label class="flex-center" style="cursor:pointer; color:var(--text); font-size:.88rem;"><input type="radio" name="opMode" value="both" checked onchange="onOpModeChange()"> Both</label>
+          <label class="flex-center" style="cursor:pointer; color:var(--text); font-size:.88rem;"><input type="radio" name="opMode" value="erosion" onchange="onOpModeChange()"> Erosion only</label>
+          <label class="flex-center" style="cursor:pointer; color:var(--text); font-size:.88rem;"><input type="radio" name="opMode" value="dilation" onchange="onOpModeChange()"> Dilation only</label>
+        </div>
+      </div>
+    </div>
+    <div class="btnbar">
+      <button onclick="startSimulation()">▶ Start Simulation</button>
+      <button class="ghost" onclick="prevStep()" id="btnPrev" disabled>⟵ Prev</button>
+      <button class="ghost" onclick="nextStep()" id="btnNext" disabled>Next ⟶</button>
+      <button class="secondary" onclick="autoPlay()" id="btnPlay" disabled>⏵ Auto Play</button>
+      <button class="ghost" onclick="jumpToEnd()" id="btnEnd" disabled>⏭ Jump to End</button>
+    </div>
+    <div class="progress"><div id="progressBar"></div></div>
+
+    <div class="stepbox hidden" id="stepInfo">
+      <h3>Current Window Position — <span class="stepnum" id="stepCounter"></span></h3>
+      <div class="readout" id="readout"></div>
+    </div>
+
+    <div class="two-col" style="margin-top:18px;">
+      <div>
+        <h3 style="color:var(--window)">Padded Matrix (sliding window)</h3>
+        <div class="grid-wrap"><div class="grid" id="simGrid"></div></div>
+      </div>
+      <div>
+        <div id="erodeSection">
+          <h3 style="color:var(--erode)">Erosion Output</h3>
+          <div class="grid-wrap"><div class="grid" id="erodeGrid"></div></div>
+        </div>
+        <div id="dilateSection">
+          <h3 style="color:var(--dilate); margin-top:18px;">Dilation Output</h3>
+          <div class="grid-wrap"><div class="grid" id="dilateGrid"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="legend" style="margin-top:16px;">
+      <span><span class="swatch" style="background:var(--cell1)"></span>Foreground (1)</span>
+      <span><span class="swatch" style="background:var(--cell0)"></span>Background (0)</span>
+      <span><span class="swatch" style="background:var(--pad)"></span>Zero-padded border</span>
+      <span><span class="swatch" style="background:var(--window)"></span>Current kernel window</span>
+      <span><span class="swatch" style="background:var(--accent2)"></span>Kernel origin / anchor (current position)</span>
+      <span><span class="swatch" style="background:var(--erode)"></span>Erosion result = 1</span>
+      <span><span class="swatch" style="background:var(--dilate)"></span>Dilation result = 1</span>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ---------- STATE ---------- */
+let matrix = [];          // binary image
+let kernel = [];          // structuring element
+let kOriginR = 1, kOriginC = 1;
+let customOriginMode = false;
+let padded = [];          // padded matrix
+let padTop=0,padBottom=0,padLeft=0,padRight=0;
+let steps = [];           // list of {r,c,window,erosionVal,dilationVal}
+let stepIdx = -1;
+let erodeOut = [], dilateOut = [];
+let playTimer = null;
+let opMode = 'both'; // 'both' | 'erosion' | 'dilation'
+
+/* ---------- STEP 1: MATRIX ---------- */
+function generateMatrix(){
+  const r = clampInt('rows',1,15), c = clampInt('cols',1,15);
+  matrix = Array.from({length:r},()=>Array(c).fill(0));
+  renderMatrix();
+  resetDownstream();
+}
+function randomizeMatrix(){
+  if(matrix.length===0) generateMatrix();
+  for(let i=0;i<matrix.length;i++)
+    for(let j=0;j<matrix[0].length;j++)
+      matrix[i][j] = Math.random()>0.5?1:0;
+  renderMatrix();
+  resetDownstream();
+}
+function renderMatrix(){
+  const grid = document.getElementById('matrixGrid');
+  grid.style.gridTemplateColumns = `repeat(${matrix[0].length}, 38px)`;
+  grid.innerHTML='';
+  matrix.forEach((row,i)=>{
+    row.forEach((val,j)=>{
+      const d = document.createElement('div');
+      d.className = 'cell'+(val?' on':'');
+      d.textContent = val;
+      d.onclick = ()=>{ matrix[i][j] = matrix[i][j]?0:1; renderMatrix(); resetDownstream();};
+      grid.appendChild(d);
+    });
+  });
+}
+
+/* ---------- STEP 2: KERNEL ---------- */
+function generateKernel(){
+  const r = clampInt('krows',1,7), c = clampInt('kcols',1,7);
+  kernel = Array.from({length:r},()=>Array(c).fill(1));
+  customOriginMode = document.getElementById('korigin').value === 'custom';
+  // Origin (1-indexed) = floor((n+1)/2); convert to 0-indexed by subtracting 1.
+  kOriginR = Math.floor((r+1)/2) - 1;
+  kOriginC = Math.floor((c+1)/2) - 1;
+  renderKernel();
+  resetDownstream();
+}
+function fillKernelOnes(){
+  if(kernel.length===0) generateKernel();
+  kernel = kernel.map(row=>row.map(()=>1));
+  renderKernel();
+  resetDownstream();
+}
+function renderKernel(){
+  const grid = document.getElementById('kernelGrid');
+  grid.style.gridTemplateColumns = `repeat(${kernel[0].length}, 38px)`;
+  grid.innerHTML='';
+  kernel.forEach((row,i)=>{
+    row.forEach((val,j)=>{
+      const d = document.createElement('div');
+      d.className = 'cell kcell'+(val?' on':'')+((i===kOriginR&&j===kOriginC)?' origin':'');
+      d.textContent = val;
+      d.onclick = ()=>{
+        customOriginMode = document.getElementById('korigin').value === 'custom';
+        if(customOriginMode){
+          kOriginR = i; kOriginC = j;
+        } else {
+          kernel[i][j] = kernel[i][j]?0:1;
+        }
+        renderKernel();
+        resetDownstream();
+      };
+      grid.appendChild(d);
+    });
+  });
+}
+
+/* ---------- STEP 3: PADDING ---------- */
+function applyPadding(){
+  if(matrix.length===0 || kernel.length===0){
+    alert('Please generate the matrix and kernel first.');
+    return;
+  }
+  const kR = kernel.length, kC = kernel[0].length;
+  padTop = kOriginR;
+  padBottom = kR-1-kOriginR;
+  padLeft = kOriginC;
+  padRight = kC-1-kOriginC;
+
+  const R = matrix.length, C = matrix[0].length;
+  const newR = R+padTop+padBottom, newC = C+padLeft+padRight;
+  padded = Array.from({length:newR},()=>Array(newC).fill(0));
+  for(let i=0;i<R;i++)
+    for(let j=0;j<C;j++)
+      padded[i+padTop][j+padLeft] = matrix[i][j];
+
+  renderPadded();
+  document.getElementById('padLegend').innerHTML =
+    `<span><span class="swatch" style="background:var(--cell1)"></span>Original foreground</span>
+     <span><span class="swatch" style="background:var(--cell0)"></span>Original background</span>
+     <span><span class="swatch" style="background:var(--pad)"></span>Zero padding (top:${padTop} bottom:${padBottom} left:${padLeft} right:${padRight})</span>`;
+  resetSimButtons(true);
+}
+function renderPadded(){
+  const grid = document.getElementById('paddedGrid');
+  grid.style.gridTemplateColumns = `repeat(${padded[0].length}, 38px)`;
+  grid.innerHTML='';
+  const R = matrix.length, C = matrix[0].length;
+  padded.forEach((row,i)=>{
+    row.forEach((val,j)=>{
+      const isPad = i<padTop || i>=padTop+R || j<padLeft || j>=padLeft+C;
+      const d = document.createElement('div');
+      d.className = 'cell'+(isPad?' padcell':' ')+(val && !isPad?' on':'')+(val && isPad?' on':'');
+      d.textContent = val;
+      grid.appendChild(d);
+    });
+  });
+}
+
+/* ---------- OP MODE (erosion / dilation / both) ---------- */
+function onOpModeChange(){
+  const sel = document.querySelector('input[name="opMode"]:checked');
+  opMode = sel ? sel.value : 'both';
+  applyOpModeVisibility();
+}
+function applyOpModeVisibility(){
+  const showErode = (opMode==='both' || opMode==='erosion');
+  const showDilate = (opMode==='both' || opMode==='dilation');
+  document.getElementById('erodeSection').classList.toggle('hidden', !showErode);
+  document.getElementById('dilateSection').classList.toggle('hidden', !showDilate);
+}
+
+/* classify a window position as FIT / HIT / MISS
+   FIT  = kernel fits entirely inside the foreground (all kernel-1 cells match image=1)  -> erosion=1
+   HIT  = at least one kernel-1 cell matches image=1, but not all                         -> dilation=1, erosion=0
+   MISS = no kernel-1 cell matches image=1 at all                                         -> dilation=0 */
+function classify(st){
+  if(st.erosionVal===1) return {label:'FIT', cls:'fhm-fit',
+    desc:'The kernel fits entirely inside the foreground — every kernel-1 position lands on image=1. This is also technically a Hit.'};
+  if(st.dilationVal===1) return {label:'HIT', cls:'fhm-hit',
+    desc:'The kernel only partially overlaps the foreground — at least one kernel-1 position lands on image=1, but not all of them.'};
+  return {label:'MISS', cls:'fhm-miss',
+    desc:'The kernel does not touch the foreground at all — none of the kernel-1 positions land on image=1.'};
+}
+
+/* ---------- STEP 4: SIMULATION ---------- */
+function startSimulation(){
+  if(padded.length===0){ alert('Please apply zero padding first.'); return; }
+  const R = matrix.length, C = matrix[0].length;
+  const kR = kernel.length, kC = kernel[0].length;
+
+  steps = [];
+  erodeOut = Array.from({length:R},()=>Array(C).fill(null));
+  dilateOut = Array.from({length:R},()=>Array(C).fill(null));
+
+  for(let i=0;i<R;i++){
+    for(let j=0;j<C;j++){
+      let erosionVal = 1, dilationVal = 0;
+      for(let ki=0;ki<kR;ki++){
+        for(let kj=0;kj<kC;kj++){
+          if(kernel[ki][kj]===1){
+            const pv = padded[i+ki][j+kj];
+            if(pv===1) dilationVal = 1;
+            if(pv===0) erosionVal = 0;
+          }
+        }
+      }
+      steps.push({r:i,c:j,erosionVal,dilationVal});
+    }
+  }
+  stepIdx = -1;
+  applyOpModeVisibility();
+  renderErodeGrid(); renderDilateGrid(); renderSimGrid(null);
+  document.getElementById('stepInfo').classList.remove('hidden');
+  document.getElementById('btnNext').disabled = false;
+  document.getElementById('btnPlay').disabled = false;
+  document.getElementById('btnEnd').disabled = false;
+  document.getElementById('btnPrev').disabled = true;
+  updateProgress();
+  nextStep();
+}
+
+function nextStep(){
+  if(stepIdx >= steps.length-1) return;
+  stepIdx++;
+  applyStep(stepIdx);
+  document.getElementById('btnPrev').disabled = stepIdx<=0;
+  if(stepIdx===steps.length-1){
+    document.getElementById('btnNext').disabled = true;
+    stopAutoPlay();
+  }
+  updateProgress();
+}
+function prevStep(){
+  if(stepIdx<=0) return;
+  // recompute outputs up to stepIdx-1
+  stepIdx--;
+  rebuildOutputsUpTo(stepIdx);
+  applyStep(stepIdx);
+  document.getElementById('btnNext').disabled = false;
+  document.getElementById('btnPrev').disabled = stepIdx<=0;
+  updateProgress();
+}
+function jumpToEnd(){
+  stopAutoPlay();
+  for(let s=0;s<steps.length;s++){ stepIdx=s; setOutputCell(s);}
+  stepIdx = steps.length-1;
+  applyStep(stepIdx, true);
+  document.getElementById('btnNext').disabled = true;
+  document.getElementById('btnPrev').disabled = false;
+  updateProgress();
+}
+function rebuildOutputsUpTo(idx){
+  const R = matrix.length, C = matrix[0].length;
+  erodeOut = Array.from({length:R},()=>Array(C).fill(null));
+  dilateOut = Array.from({length:R},()=>Array(C).fill(null));
+  for(let s=0;s<idx;s++) setOutputCell(s);
+  renderErodeGrid(); renderDilateGrid();
+}
+function setOutputCell(s){
+  const st = steps[s];
+  erodeOut[st.r][st.c] = st.erosionVal;
+  dilateOut[st.r][st.c] = st.dilationVal;
+}
+function applyStep(idx, skipRender){
+  const st = steps[idx];
+  setOutputCell(idx);
+  renderSimGrid(st);
+  if(!skipRender){ renderErodeGrid(); renderDilateGrid(); }
+  else { renderErodeGrid(); renderDilateGrid(); }
+  document.getElementById('stepCounter').textContent = `${idx+1} / ${steps.length}  (output row ${st.r}, col ${st.c})`;
+
+  const fhm = classify(st);
+  let opLines = '';
+  if(opMode==='both' || opMode==='erosion'){
+    opLines += `Erosion rule: output = 1 only if <b>image = 1 everywhere the kernel = 1</b> → result = <b style="color:var(--erode)">${st.erosionVal}</b><br>`;
+  }
+  if(opMode==='both' || opMode==='dilation'){
+    opLines += `Dilation rule: output = 1 if <b>image = 1 anywhere the kernel = 1</b> → result = <b style="color:var(--dilate)">${st.dilationVal}</b><br>`;
+  }
+
+  document.getElementById('readout').innerHTML =
+    `<span class="fhm-badge ${fhm.cls}">${fhm.label}</span><br>
+     <span style="color:var(--muted)">${fhm.desc}</span><br><br>
+     Kernel origin aligned at padded-matrix position <b>(${st.r+kOriginR},${st.c+kOriginC})</b> mapping to output cell <b>(${st.r}, ${st.c})</b>.<br>
+     ${opLines}`;
+}
+function autoPlay(){
+  if(playTimer){ stopAutoPlay(); return; }
+  document.getElementById('btnPlay').textContent = '⏸ Pause';
+  playTimer = setInterval(()=>{
+    if(stepIdx>=steps.length-1){ stopAutoPlay(); return; }
+    nextStep();
+  },600);
+}
+function stopAutoPlay(){
+  if(playTimer){ clearInterval(playTimer); playTimer=null; }
+  document.getElementById('btnPlay').textContent = '⏵ Auto Play';
+}
+function updateProgress(){
+  const pct = steps.length? Math.round(((stepIdx+1)/steps.length)*100) : 0;
+  document.getElementById('progressBar').style.width = pct+'%';
+}
+
+function renderSimGrid(currentStep){
+  const grid = document.getElementById('simGrid');
+  grid.style.gridTemplateColumns = `repeat(${padded[0].length}, 38px)`;
+  grid.innerHTML='';
+  const R = matrix.length, C = matrix[0].length;
+  const kR = kernel.length, kC = kernel[0].length;
+  padded.forEach((row,i)=>{
+    row.forEach((val,j)=>{
+      const isPad = i<padTop || i>=padTop+R || j<padLeft || j>=padLeft+C;
+      const d = document.createElement('div');
+      let cls = 'cell'+(isPad?' padcell':'')+(val?' on':'');
+      if(currentStep){
+        const inWindow = i>=currentStep.r && i<currentStep.r+kR && j>=currentStep.c && j<currentStep.c+kC;
+        if(inWindow){
+          cls += ' window-hl';
+          const ki=i-currentStep.r, kj=j-currentStep.c;
+          if(kernel[ki][kj]===1) cls += ' kernel-active';
+          if(ki===kOriginR && kj===kOriginC) cls += ' origin-hl';
+        }
+      }
+      d.className = cls;
+      d.textContent = val;
+      grid.appendChild(d);
+    });
+  });
+}
+function renderErodeGrid(){ renderOutGrid('erodeGrid', erodeOut, 'erode'); }
+function renderDilateGrid(){ renderOutGrid('dilateGrid', dilateOut, 'dilate'); }
+function renderOutGrid(id, data, kind){
+  const grid = document.getElementById(id);
+  grid.style.gridTemplateColumns = `repeat(${matrix[0].length}, 38px)`;
+  grid.innerHTML='';
+  data.forEach(row=>{
+    row.forEach(val=>{
+      const d = document.createElement('div');
+      d.className = 'cell out-cell';
+      if(val===null){ d.textContent=''; d.style.opacity=.25; }
+      else{
+        d.textContent = val;
+        if(val===1) d.style.background = kind==='erode' ? 'var(--erode)' : 'var(--dilate)';
+        if(val===1) d.style.color = '#1a0508';
+      }
+      grid.appendChild(d);
+    });
+  });
+}
+
+/* ---------- HELPERS ---------- */
+function clampInt(id,min,max){
+  const el = document.getElementById(id);
+  let v = parseInt(el.value)||min;
+  v = Math.max(min,Math.min(max,v));
+  el.value = v;
+  return v;
+}
+function resetDownstream(){
+  padded = [];
+  document.getElementById('paddedGrid').innerHTML='';
+  document.getElementById('padLegend').innerHTML='';
+  resetSimButtons(false);
+}
+function resetSimButtons(padReady){
+  stopAutoPlay();
+  steps = []; stepIdx=-1;
+  document.getElementById('simGrid').innerHTML='';
+  document.getElementById('erodeGrid').innerHTML='';
+  document.getElementById('dilateGrid').innerHTML='';
+  document.getElementById('stepInfo').classList.add('hidden');
+  document.getElementById('progressBar').style.width='0%';
+  document.getElementById('btnNext').disabled = true;
+  document.getElementById('btnPrev').disabled = true;
+  document.getElementById('btnPlay').disabled = true;
+  document.getElementById('btnEnd').disabled = true;
+}
+
+/* ---------- INIT ---------- */
+generateMatrix();
+generateKernel();
+</script>
+</body>
+</html>
