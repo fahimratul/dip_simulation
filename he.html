@@ -98,7 +98,7 @@
 <body>
 <div class="container">
   <h1>📊 Histogram Equalization Simulator</h1>
-  <p class="subtitle">Build a grayscale image, compute its histogram, derive the <b>CDF</b>, and watch the equalization mapping s<sub>k</sub> = round((L−1)·CDF(r<sub>k</sub>)) get applied pixel by pixel to flatten the intensity distribution.</p>
+  <p class="subtitle">Build a grayscale image, tally the <b>cumulative count</b> (cdf), and watch the normalized mapping <b>h(v) = round( (cdf(v) − cdf<sub>min</sub>) / (MN − cdf<sub>min</sub>) · (L−1) )</b> get applied pixel by pixel to flatten the intensity distribution. Values with a zero count are excluded.</p>
 
   <!-- STEP 1: MATRIX -->
   <div class="panel" id="panel-matrix">
@@ -106,7 +106,7 @@
     <div class="row">
       <div class="field"><label>Rows</label><input type="number" id="rows" min="1" max="12" value="5"></div>
       <div class="field"><label>Columns</label><input type="number" id="cols" min="1" max="12" value="5"></div>
-      <div class="field"><label>Gray levels (L)</label><input type="number" id="levels" min="2" max="256" value="8"></div>
+      <div class="field"><label>Gray levels (L)</label><input type="number" id="levels" min="2" max="256" value="256"></div>
       <div class="field" style="align-self:flex-end;"><button onclick="generateMatrix()">Generate Matrix</button></div>
       <div class="field" style="align-self:flex-end;"><button class="secondary" onclick="randomizeMatrix()">Randomize</button></div>
       <div class="field" style="align-self:flex-end;"><button class="ghost" onclick="loadExample()">Example (Gonzalez)</button></div>
@@ -118,7 +118,7 @@
   <!-- STEP 2: HISTOGRAM TABLE -->
   <div class="panel" id="panel-hist">
     <h2>Step 2 — Histogram, PDF, CDF &amp; Mapping Table</h2>
-    <p class="note">For each intensity <code>r<sub>k</sub></code>: count pixels <code>n<sub>k</sub></code>, probability <code>p<sub>k</sub> = n<sub>k</sub>/MN</code>, cumulative <code>CDF(r<sub>k</sub>) = Σ p<sub>j</sub></code>, and new intensity <code>s<sub>k</sub> = round((L−1)·CDF(r<sub>k</sub>))</code>.</p>
+    <p class="note">For every intensity <code>v</code> that actually appears in the image: count pixels <code>n</code>, cumulative count <code>cdf(v) = Σ n</code>, then normalize to <code>[0, L−1]</code> using <code>h(v) = round( (cdf(v) − cdf<sub>min</sub>) / (MN − cdf<sub>min</sub>) · (L−1) )</code>, where <code>cdf<sub>min</sub></code> is the cdf of the smallest value present.</p>
     <div class="btnbar">
       <button onclick="buildHistogram()">Compute Histogram &amp; Mapping</button>
     </div>
@@ -175,9 +175,10 @@
 <script>
 /* ---------- STATE ---------- */
 let matrix = [];
-let L = 8;
-let histTable = [];   // array of {r, n, p, cdf, s}
-let mapping = {};     // r -> s
+let L = 256;
+let histTable = [];   // array of {r, n, cdf, h} — only intensities that appear
+let histMeta = {MN:0, cdfMin:0, denom:1, L:256};
+let mapping = {};     // r -> h(r)
 let equalized = [];   // M×N of mapped intensities (null initially during stepping)
 let steps = [];       // list of {r,c, oldVal, newVal}
 let stepIdx = -1;
@@ -201,24 +202,22 @@ function randomizeMatrix(){
   resetDownstream();
 }
 function loadExample(){
-  // Classic Gonzalez & Woods textbook example: 64×64 is impractical for a
-  // step-by-step demo, so we use a small 8×8 image with 8 gray levels (L=8)
-  // that follows a similar skewed distribution leaning toward dark pixels.
+  // 8×8 sub-image from the lecture slide (8-bit, L = 256).
   const ex = [
-    [0,0,0,1,1,1,2,2],
-    [0,0,1,1,2,2,3,3],
-    [0,1,1,2,2,3,3,4],
-    [1,1,2,2,3,3,4,4],
-    [1,2,2,3,3,4,4,5],
-    [2,2,3,3,4,4,5,5],
-    [2,3,3,4,4,5,5,6],
-    [3,3,4,4,5,5,6,7]
+    [52,55,61,66,70,61,64,73],
+    [63,59,55,90,109,85,69,72],
+    [62,59,68,113,144,104,66,73],
+    [63,58,71,122,154,106,70,69],
+    [67,61,68,104,126,88,68,70],
+    [79,65,60,70,77,68,58,75],
+    [85,71,64,59,55,61,65,83],
+    [87,79,69,68,65,76,78,94]
   ];
   matrix = ex.map(row=>row.slice());
-  L = 8;
+  L = 256;
   document.getElementById('rows').value = 8;
   document.getElementById('cols').value = 8;
-  document.getElementById('levels').value = 8;
+  document.getElementById('levels').value = 256;
   renderMatrix();
   resetDownstream();
 }
@@ -265,68 +264,85 @@ function buildHistogram(){
       const v = matrix[i][j];
       if(v>=0 && v<L) counts[v]++;
     }
+  // Cumulative COUNT (not probability). Skip zero-count values entirely.
   histTable = [];
   let cum = 0;
+  let cdfMin = null;
   for(let k=0;k<L;k++){
-    const n = counts[k];
-    const p = n/MN;
-    cum += p;
-    const s = Math.round((L-1)*cum);
-    histTable.push({r:k, n, p, cdf:cum, s});
+    if(counts[k] > 0){
+      cum += counts[k];
+      if(cdfMin===null) cdfMin = cum;
+      histTable.push({r:k, n:counts[k], cdf:cum, h:0});
+    }
   }
+  const denom = MN - cdfMin;
+  histTable.forEach(row => {
+    row.h = denom>0
+      ? Math.round((row.cdf - cdfMin) / denom * (L-1))
+      : 0;
+  });
   mapping = {};
-  histTable.forEach(row => { mapping[row.r] = row.s; });
+  histTable.forEach(row => { mapping[row.r] = row.h; });
+  histMeta = {MN, cdfMin, denom, L};
 
-  // Equalized intensities for histogram chart
-  const eqCounts = new Array(L).fill(0);
-  for(let k=0;k<L;k++) eqCounts[ histTable[k].s ] += counts[k];
+  // Equalized counts: pool original counts by their mapped intensity h.
+  const eqMap = new Map();
+  histTable.forEach(row => {
+    eqMap.set(row.h, (eqMap.get(row.h)||0) + row.n);
+  });
+  const eqEntries = [...eqMap.entries()]
+    .map(([label, count]) => ({label, count}))
+    .sort((a,b)=>a.label-b.label);
 
   renderHistTable(-1);
-  renderBarChart('chartOrig', counts, 'var(--orig)');
-  renderBarChart('chartEq', eqCounts, 'var(--eq)');
+  renderBarChart('chartOrig', histTable.map(r=>({label:r.r, count:r.n})), 'var(--orig)');
+  renderBarChart('chartEq',   eqEntries,                                   'var(--eq)');
   resetSimButtons(true);
 }
 function renderHistTable(highlightR){
   const wrap = document.getElementById('histTableWrap');
-  const MN = matrix.length * matrix[0].length;
-  let html = `<table class="htable">
-    <tr>
-      <th>k</th>
-      <th>r<sub>k</sub></th>
-      <th>n<sub>k</sub></th>
-      <th>p<sub>k</sub> = n<sub>k</sub>/${MN}</th>
-      <th style="color:var(--cdf)">CDF(r<sub>k</sub>)</th>
-      <th style="color:var(--eq)">s<sub>k</sub> = round((${L-1})·CDF)</th>
-    </tr>`;
+  const {MN, cdfMin, denom, L:Lm} = histMeta;
+  let html = `<p class="note" style="margin-top:10px;">
+      MN = <b>${MN}</b>, cdf<sub>min</sub> = <b>${cdfMin}</b>, L = <b>${Lm}</b>.
+      Formula: <b>h(v) = round( (cdf(v) − ${cdfMin}) / ${denom} × ${Lm-1} )</b>
+    </p>
+    <table class="htable">
+      <tr>
+        <th>k</th>
+        <th>Value (v)</th>
+        <th>Count (n)</th>
+        <th style="color:var(--cdf)">cdf</th>
+        <th style="color:var(--eq)">h(v)</th>
+      </tr>`;
   histTable.forEach((row,k) => {
     const hl = (row.r===highlightR) ? ' class="hl"' : '';
     html += `<tr${hl}>
-      <td>${k}</td>
+      <td>${k+1}</td>
       <td>${row.r}</td>
       <td>${row.n}</td>
-      <td>${row.p.toFixed(3)}</td>
-      <td>${row.cdf.toFixed(3)}</td>
-      <td class="s-col">${row.s}</td>
+      <td>${row.cdf}</td>
+      <td class="s-col">${row.h}</td>
     </tr>`;
   });
   html += '</table>';
   wrap.innerHTML = html;
 }
-function renderBarChart(id, counts, color, highlightIdx){
+function renderBarChart(id, entries, color, highlightLabel){
   const wrap = document.getElementById(id);
   wrap.innerHTML = '';
-  const maxC = Math.max(1, ...counts);
-  counts.forEach((c, k) => {
+  if(entries.length === 0) return;
+  const maxC = Math.max(1, ...entries.map(e=>e.count));
+  entries.forEach(e => {
     const bw = document.createElement('div');
     bw.className = 'bar-wrap';
     const cnt = document.createElement('div');
-    cnt.className = 'bar-count'; cnt.textContent = c;
+    cnt.className = 'bar-count'; cnt.textContent = e.count;
     const bar = document.createElement('div');
-    bar.className = 'bar' + (k===highlightIdx ? ' hl' : '');
+    bar.className = 'bar' + (e.label===highlightLabel ? ' hl' : '');
     bar.style.background = color;
-    bar.style.height = (c/maxC*90) + 'px';
+    bar.style.height = (e.count/maxC*90) + 'px';
     const lab = document.createElement('div');
-    lab.className = 'bar-label'; lab.textContent = k;
+    lab.className = 'bar-label'; lab.textContent = e.label;
     bw.appendChild(cnt); bw.appendChild(bar); bw.appendChild(lab);
     wrap.appendChild(bw);
   });
@@ -401,10 +417,12 @@ function applyStep(idx){
     `${idx+1} / ${steps.length}  (row ${st.r}, col ${st.c})`;
 
   const row = histTable.find(x => x.r===st.oldVal);
+  const {cdfMin, denom, L:Lm} = histMeta;
+  const ratio = denom>0 ? ((row.cdf - cdfMin)/denom) : 0;
   document.getElementById('readout').innerHTML =
-    `Pixel at <b>(${st.r}, ${st.c})</b> has intensity <b style="color:var(--orig)">r = ${st.oldVal}</b>.<br>
-     Look up the mapping: <b style="color:var(--cdf)">CDF(${st.oldVal}) = ${row.cdf.toFixed(3)}</b>, so
-     <b style="color:var(--eq)">s = round((${L-1}) × ${row.cdf.toFixed(3)}) = ${st.newVal}</b>.
+    `Pixel at <b>(${st.r}, ${st.c})</b> has intensity <b style="color:var(--orig)">v = ${st.oldVal}</b>.<br>
+     Look up its <b style="color:var(--cdf)">cdf(${st.oldVal}) = ${row.cdf}</b>, then normalize:
+     <b style="color:var(--eq)">h(${st.oldVal}) = round( (${row.cdf} − ${cdfMin}) / ${denom} × ${Lm-1} ) = round(${ratio.toFixed(6)} × ${Lm-1}) = ${st.newVal}</b>.
      <span class="math">equalized[${st.r}][${st.c}] = ${st.oldVal} → ${st.newVal}</span>`;
 }
 function autoPlay(){
@@ -466,7 +484,7 @@ function clampInt(id,min,max){
   return v;
 }
 function resetDownstream(){
-  histTable = []; mapping = {};
+  histTable = []; mapping = {}; histMeta = {MN:0, cdfMin:0, denom:1, L};
   document.getElementById('histTableWrap').innerHTML = '';
   document.getElementById('chartOrig').innerHTML = '';
   document.getElementById('chartEq').innerHTML = '';

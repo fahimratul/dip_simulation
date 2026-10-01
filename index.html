@@ -15,6 +15,8 @@
     --c1:#00fff2;   /* cyan   */
     --c2:#ff2e6e;   /* magenta */
     --c3:#8b6bff;   /* violet */
+    --c4:#5eff9c;   /* mint   */
+    --c5:#ffc94d;   /* amber  */
   }
 
   *{ box-sizing:border-box; }
@@ -136,6 +138,8 @@
   .card:nth-child(1){ --accent:var(--c1); }
   .card:nth-child(2){ --accent:var(--c2); }
   .card:nth-child(3){ --accent:var(--c3); }
+  .card:nth-child(4){ --accent:var(--c4); }
+  .card:nth-child(5){ --accent:var(--c5); }
 
   .card:hover{
     border-color:color-mix(in srgb, var(--accent) 55%, transparent);
