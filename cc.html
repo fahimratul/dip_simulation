@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Correlation & Convolution Simulator</title>
+<style>
+  :root{
+    --bg:#0f1420; --panel:#161d2e; --panel2:#1c2540; --accent:#5eb3ff; --accent2:#ff8a5e;
+    --text:#e7ecf7; --muted:#8b96b3; --cell0:#1c2540; --cell1:#5eb3ff; --pad:#2a3350;
+    --corr:#5eff9c; --conv:#ff6bd6; --window:#ffd166;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; font-family:'Segoe UI',Roboto,Arial,sans-serif; background:linear-gradient(160deg,#0b0f1a,#141b2e);
+    color:var(--text); padding:24px; line-height:1.5;
+  }
+  h1{font-size:1.5rem; margin-bottom:4px;}
+  h2{font-size:1.05rem; color:var(--accent); border-bottom:1px solid #2a3350; padding-bottom:6px; margin-top:0;}
+  .subtitle{color:var(--muted); margin-top:0; margin-bottom:24px; font-size:.92rem;}
+  .container{max-width:1200px; margin:0 auto;}
+  .panel{
+    background:var(--panel); border:1px solid #26304a; border-radius:14px; padding:20px;
+    margin-bottom:20px; box-shadow:0 4px 18px rgba(0,0,0,.25);
+  }
+  .row{display:flex; flex-wrap:wrap; gap:20px; align-items:flex-start;}
+  label{font-size:.85rem; color:var(--muted); display:block; margin-bottom:4px;}
+  input[type=number]{
+    width:70px; padding:6px 8px; border-radius:8px; border:1px solid #33405f; background:#0f1424; color:var(--text);
+  }
+  select{
+    padding:6px 8px; border-radius:8px; border:1px solid #33405f; background:#0f1424; color:var(--text);
+  }
+  .field{margin-bottom:10px;}
+  button{
+    background:linear-gradient(135deg,var(--accent),#3d84c9); border:none; color:#08111f; font-weight:600;
+    padding:9px 16px; border-radius:9px; cursor:pointer; font-size:.88rem; transition:transform .1s, opacity .15s;
+  }
+  button:hover{transform:translateY(-1px);}
+  button:disabled{opacity:.35; cursor:not-allowed; transform:none;}
+  button.secondary{background:linear-gradient(135deg,#3a4568,#293252); color:var(--text);}
+  button.ghost{background:transparent; border:1px solid #33405f; color:var(--text);}
+  .btnbar{display:flex; gap:10px; flex-wrap:wrap; margin-top:12px;}
+  .grid-wrap{overflow:auto; padding:6px;}
+  .grid{display:inline-grid; gap:3px; }
+  .cell{
+    width:44px; height:44px; display:flex; align-items:center; justify-content:center;
+    font-size:.85rem; font-weight:700; border-radius:6px; user-select:none;
+    background:var(--cell0); color:var(--text); border:1px solid #2c3654; transition:.12s;
+  }
+  .cell input{
+    width:100%; height:100%; text-align:center; background:transparent; border:none; color:inherit;
+    font-weight:700; font-size:.85rem; outline:none; padding:0; font-family:inherit;
+  }
+  .cell input:focus{background:rgba(94,179,255,.15);}
+  .cell.readonly{cursor:default;}
+  .cell.zeroval{color:var(--muted);}
+  .padcell{background:repeating-linear-gradient(45deg,#151b2c,#151b2c 5px,#1b2338 5px,#1b2338 10px); color:#4a5578; border:1px dashed #3a4568;}
+  .padcell.nonzero{color:#7fb3ff;}
+  .kcell.origin{box-shadow:inset 0 0 0 3px var(--accent2);}
+  .window-hl{outline:3px solid var(--window)!important; z-index:2;}
+  .kernel-active{background:rgba(255,209,102,.18)!important;}
+  .origin-hl{outline:3px solid var(--accent2)!important; box-shadow:0 0 8px rgba(255,138,94,.7)!important;}
+  .legend{display:flex; gap:18px; flex-wrap:wrap; font-size:.8rem; color:var(--muted); margin-top:10px;}
+  .swatch{display:inline-block; width:14px; height:14px; border-radius:4px; vertical-align:middle; margin-right:6px;}
+  .stepbox{
+    background:var(--panel2); border-radius:12px; padding:16px; margin-top:16px; border:1px solid #2a3350;
+  }
+  .stepbox h3{margin:0 0 10px 0; font-size:.95rem; color:var(--accent2);}
+  .readout{font-size:.85rem; color:var(--text); background:#0f1424; padding:10px 12px; border-radius:8px; border:1px solid #26304a;}
+  .readout b{color:var(--accent);}
+  .readout .math{font-family:'Consolas','Courier New',monospace; font-size:.82rem; color:var(--muted); display:block; margin-top:6px; word-break:break-word;}
+  .two-col{display:grid; grid-template-columns:1fr 1fr; gap:20px;}
+  @media(max-width:900px){.two-col{grid-template-columns:1fr;}}
+  .out-cell{width:52px;height:44px; font-size:.8rem;}
+  .hidden{display:none!important;}
+  .stepnum{font-weight:700; color:var(--window);}
+  .progress{height:6px; background:#0f1424; border-radius:4px; overflow:hidden; margin:10px 0;}
+  .progress > div{height:100%; background:linear-gradient(90deg,var(--accent),var(--accent2)); width:0%; transition:.2s;}
+  .note{font-size:.78rem; color:var(--muted); margin-top:8px;}
+  .flex-center{display:flex; align-items:center; gap:10px;}
+  .mask-preview{display:inline-block; margin-left:12px; vertical-align:middle;}
+  .mask-preview .grid{gap:2px;}
+  .mask-preview .cell{width:32px; height:32px; font-size:.72rem;}
+  .presets{display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;}
+  .presets button{padding:6px 10px; font-size:.78rem;}
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🎛️ Correlation &amp; Convolution Simulator</h1>
+  <p class="subtitle">Build a numeric image matrix, define a mask (kernel), zero-pad the borders, then step through <b>Correlation</b> and <b>Convolution</b> cell by cell to see how the sliding window produces each output value.</p>
+
+  <!-- STEP 1: MATRIX -->
+  <div class="panel" id="panel-matrix">
+    <h2>Step 1 — Define the Image Matrix</h2>
+    <div class="row">
+      <div class="field"><label>Rows</label><input type="number" id="rows" min="1" max="12" value="5"></div>
+      <div class="field"><label>Columns</label><input type="number" id="cols" min="1" max="12" value="5"></div>
+      <div class="field" style="align-self:flex-end;"><button onclick="generateMatrix()">Generate Matrix</button></div>
+      <div class="field" style="align-self:flex-end;"><button class="secondary" onclick="randomizeMatrix()">Randomize (0-9)</button></div>
+      <div class="field" style="align-self:flex-end;"><button class="ghost" onclick="clearMatrix()">Clear</button></div>
+    </div>
+    <p class="note">Click any cell to edit its value. Values can be any integer or decimal — background pixels are typically 0.</p>
+    <div class="grid-wrap"><div class="grid" id="matrixGrid"></div></div>
+  </div>
+
+  <!-- STEP 2: KERNEL -->
+  <div class="panel" id="panel-kernel">
+    <h2>Step 2 — Define the Mask / Kernel</h2>
+    <div class="row">
+      <div class="field"><label>Mask Rows</label><input type="number" id="krows" min="1" max="7" value="3"></div>
+      <div class="field"><label>Mask Cols</label><input type="number" id="kcols" min="1" max="7" value="3"></div>
+      <div class="field"><label>Origin (anchor)</label>
+        <select id="korigin">
+          <option value="center" selected>Center — floor((n+1)/2)</option>
+          <option value="custom">Custom (click a mask cell to set)</option>
+        </select>
+      </div>
+      <div class="field" style="align-self:flex-end;"><button onclick="generateKernel()">Generate Mask</button></div>
+    </div>
+    <div class="presets">
+      <span style="color:var(--muted); font-size:.8rem; align-self:center;">Presets:</span>
+      <button class="ghost" onclick="loadPreset('mean')">3×3 Mean</button>
+      <button class="ghost" onclick="loadPreset('sharpen')">Sharpen</button>
+      <button class="ghost" onclick="loadPreset('sobelx')">Sobel X</button>
+      <button class="ghost" onclick="loadPreset('sobely')">Sobel Y</button>
+      <button class="ghost" onclick="loadPreset('laplacian')">Laplacian</button>
+    </div>
+    <p class="note">Click a mask cell to edit its weight (integers, decimals, or negatives allowed). The <span style="color:var(--accent2);font-weight:700;">orange-bordered</span> cell is the origin/anchor. If "Custom" is selected, click a cell once to set it as origin (without editing).</p>
+    <div class="grid-wrap"><div class="grid" id="kernelGrid"></div></div>
+  </div>
+
+  <!-- STEP 3: PADDING -->
+  <div class="panel" id="panel-pad">
+    <h2>Step 3 — Zero Padding</h2>
+    <p class="note">Padding is derived from the mask size and origin so every mask position — including at the image borders — has a full neighborhood. Padded cells are shown with a hatched pattern.</p>
+    <div class="btnbar">
+      <button onclick="applyPadding()">Apply Zero Padding</button>
+    </div>
+    <div class="grid-wrap" style="margin-top:14px;"><div class="grid" id="paddedGrid"></div></div>
+    <div class="legend" id="padLegend"></div>
+  </div>
+
+  <!-- STEP 4: STEP-BY-STEP SIMULATION -->
+  <div class="panel" id="panel-sim">
+    <h2>Step 4 — Step-by-Step Correlation &amp; Convolution</h2>
+    <div class="row" style="margin-bottom:6px;">
+      <div class="field">
+        <label>Which operation do you want to see?</label>
+        <div class="flex-center">
+          <label class="flex-center" style="cursor:pointer; color:var(--text); font-size:.88rem;"><input type="radio" name="opMode" value="both" checked onchange="onOpModeChange()"> Both</label>
+          <label class="flex-center" style="cursor:pointer; color:var(--text); font-size:.88rem;"><input type="radio" name="opMode" value="correlation" onchange="onOpModeChange()"> Correlation only</label>
+          <label class="flex-center" style="cursor:pointer; color:var(--text); font-size:.88rem;"><input type="radio" name="opMode" value="convolution" onchange="onOpModeChange()"> Convolution only</label>
+        </div>
+      </div>
+      <div class="field">
+        <label>Output decimals</label>
+        <input type="number" id="decimals" min="0" max="4" value="2" style="width:60px;">
+      </div>
+    </div>
+    <div class="btnbar">
+      <button onclick="startSimulation()">▶ Start Simulation</button>
+      <button class="ghost" onclick="prevStep()" id="btnPrev" disabled>⟵ Prev</button>
+      <button class="ghost" onclick="nextStep()" id="btnNext" disabled>Next ⟶</button>
+      <button class="secondary" onclick="autoPlay()" id="btnPlay" disabled>⏵ Auto Play</button>
+      <button class="ghost" onclick="jumpToEnd()" id="btnEnd" disabled>⏭ Jump to End</button>
+    </div>
+    <div class="progress"><div id="progressBar"></div></div>
+
+    <div class="stepbox hidden" id="stepInfo">
+      <h3>Current Window Position — <span class="stepnum" id="stepCounter"></span></h3>
+      <div class="readout" id="readout"></div>
+    </div>
+
+    <div class="two-col" style="margin-top:18px;">
+      <div>
+        <h3 style="color:var(--window)">Padded Image (sliding window)</h3>
+        <div class="grid-wrap"><div class="grid" id="simGrid"></div></div>
+        <div id="maskDisplay" style="margin-top:16px;"></div>
+      </div>
+      <div>
+        <div id="corrSection">
+          <h3 style="color:var(--corr)">Correlation Output</h3>
+          <p class="note" style="margin-top:0;">Mask is applied <b>as-is</b>: g(i,j) = Σ w(k,l) · f(i+k, j+l)</p>
+          <div class="grid-wrap"><div class="grid" id="corrGrid"></div></div>
+        </div>
+        <div id="convSection" style="margin-top:18px;">
+          <h3 style="color:var(--conv)">Convolution Output</h3>
+          <p class="note" style="margin-top:0;">Mask is <b>flipped 180°</b> first: g(i,j) = Σ w(k,l) · f(i−k, j−l)</p>
+          <div class="grid-wrap"><div class="grid" id="convGrid"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="legend" style="margin-top:16px;">
+      <span><span class="swatch" style="background:var(--cell0); border:1px solid #2c3654;"></span>Image cell</span>
+      <span><span class="swatch" style="background:var(--pad)"></span>Zero-padded border</span>
+      <span><span class="swatch" style="background:var(--window)"></span>Current window</span>
+      <span><span class="swatch" style="background:var(--accent2)"></span>Mask origin / anchor</span>
+      <span><span class="swatch" style="background:var(--corr)"></span>Correlation result</span>
+      <span><span class="swatch" style="background:var(--conv)"></span>Convolution result</span>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ---------- STATE ---------- */
+let matrix = [];          // numeric image
+let kernel = [];          // numeric mask
+let kOriginR = 1, kOriginC = 1;
+let customOriginMode = false;
+let padded = [];          // padded matrix
+let padTop=0,padBottom=0,padLeft=0,padRight=0;
+let steps = [];
+let stepIdx = -1;
+let corrOut = [], convOut = [];
+let playTimer = null;
+let opMode = 'both';
+
+/* ---------- STEP 1: MATRIX ---------- */
+function generateMatrix(){
+  const r = clampInt('rows',1,12), c = clampInt('cols',1,12);
+  matrix = Array.from({length:r},()=>Array(c).fill(0));
+  renderMatrix();
+  resetDownstream();
+}
+function randomizeMatrix(){
+  if(matrix.length===0) generateMatrix();
+  for(let i=0;i<matrix.length;i++)
+    for(let j=0;j<matrix[0].length;j++)
+      matrix[i][j] = Math.floor(Math.random()*10);
+  renderMatrix();
+  resetDownstream();
+}
+function clearMatrix(){
+  if(matrix.length===0) generateMatrix();
+  for(let i=0;i<matrix.length;i++)
+    for(let j=0;j<matrix[0].length;j++)
+      matrix[i][j] = 0;
+  renderMatrix();
+  resetDownstream();
+}
+function renderMatrix(){
+  const grid = document.getElementById('matrixGrid');
+  grid.style.gridTemplateColumns = `repeat(${matrix[0].length}, 44px)`;
+  grid.innerHTML='';
+  matrix.forEach((row,i)=>{
+    row.forEach((val,j)=>{
+      const d = document.createElement('div');
+      d.className = 'cell' + (val===0 ? ' zeroval' : '');
+      const inp = document.createElement('input');
+      inp.type = 'text';
+      inp.value = fmtVal(val);
+      inp.addEventListener('change', ()=>{
+        const v = parseFloat(inp.value);
+        matrix[i][j] = isNaN(v) ? 0 : v;
+        d.classList.toggle('zeroval', matrix[i][j]===0);
+        inp.value = fmtVal(matrix[i][j]);
+        resetDownstream();
+      });
+      d.appendChild(inp);
+      grid.appendChild(d);
+    });
+  });
+}
+
+/* ---------- STEP 2: KERNEL ---------- */
+function generateKernel(){
+  const r = clampInt('krows',1,7), c = clampInt('kcols',1,7);
+  kernel = Array.from({length:r},()=>Array(c).fill(1));
+  customOriginMode = document.getElementById('korigin').value === 'custom';
+  kOriginR = Math.floor((r+1)/2) - 1;
+  kOriginC = Math.floor((c+1)/2) - 1;
+  renderKernel();
+  resetDownstream();
+}
+function loadPreset(name){
+  const presets = {
+    mean:      { k:[[1/9,1/9,1/9],[1/9,1/9,1/9],[1/9,1/9,1/9]] },
+    sharpen:   { k:[[0,-1,0],[-1,5,-1],[0,-1,0]] },
+    sobelx:    { k:[[-1,0,1],[-2,0,2],[-1,0,1]] },
+    sobely:    { k:[[-1,-2,-1],[0,0,0],[1,2,1]] },
+    laplacian: { k:[[0,-1,0],[-1,4,-1],[0,-1,0]] }
+  };
+  const p = presets[name]; if(!p) return;
+  kernel = p.k.map(row=>row.slice());
+  document.getElementById('krows').value = kernel.length;
+  document.getElementById('kcols').value = kernel[0].length;
+  kOriginR = Math.floor((kernel.length+1)/2) - 1;
+  kOriginC = Math.floor((kernel[0].length+1)/2) - 1;
+  renderKernel();
+  resetDownstream();
+}
+function renderKernel(){
+  const grid = document.getElementById('kernelGrid');
+  grid.style.gridTemplateColumns = `repeat(${kernel[0].length}, 44px)`;
+  grid.innerHTML='';
+  kernel.forEach((row,i)=>{
+    row.forEach((val,j)=>{
+      const d = document.createElement('div');
+      const isOrigin = (i===kOriginR && j===kOriginC);
+      d.className = 'cell kcell' + (isOrigin ? ' origin' : '') + (val===0 ? ' zeroval' : '');
+      if(customOriginMode){
+        d.textContent = fmtVal(val);
+        d.style.cursor = 'pointer';
+        d.onclick = ()=>{
+          kOriginR = i; kOriginC = j;
+          renderKernel();
+          resetDownstream();
+        };
+      } else {
+        const inp = document.createElement('input');
+        inp.type = 'text';
+        inp.value = fmtVal(val);
+        inp.addEventListener('change', ()=>{
+          const v = parseFloat(inp.value);
+          kernel[i][j] = isNaN(v) ? 0 : v;
+          d.classList.toggle('zeroval', kernel[i][j]===0);
+          inp.value = fmtVal(kernel[i][j]);
+          resetDownstream();
+        });
+        d.appendChild(inp);
+      }
+      grid.appendChild(d);
+    });
+  });
+  // watch dropdown changes
+  const sel = document.getElementById('korigin');
+  sel.onchange = ()=>{
+    customOriginMode = sel.value === 'custom';
+    renderKernel();
+  };
+}
+
+/* ---------- STEP 3: PADDING ---------- */
+function applyPadding(){
+  if(matrix.length===0 || kernel.length===0){
+    alert('Please generate the matrix and mask first.');
+    return;
+  }
+  const kR = kernel.length, kC = kernel[0].length;
+  padTop = kOriginR;
+  padBottom = kR-1-kOriginR;
+  padLeft = kOriginC;
+  padRight = kC-1-kOriginC;
+
+  const R = matrix.length, C = matrix[0].length;
+  const newR = R+padTop+padBottom, newC = C+padLeft+padRight;
+  padded = Array.from({length:newR},()=>Array(newC).fill(0));
+  for(let i=0;i<R;i++)
+    for(let j=0;j<C;j++)
+      padded[i+padTop][j+padLeft] = matrix[i][j];
+
+  renderPadded();
+  document.getElementById('padLegend').innerHTML =
+    `<span><span class="swatch" style="background:var(--cell0); border:1px solid #2c3654;"></span>Original image</span>
+     <span><span class="swatch" style="background:var(--pad)"></span>Zero padding (top:${padTop} bottom:${padBottom} left:${padLeft} right:${padRight})</span>`;
+  resetSimButtons(true);
+}
+function renderPadded(){
+  const grid = document.getElementById('paddedGrid');
+  grid.style.gridTemplateColumns = `repeat(${padded[0].length}, 44px)`;
+  grid.innerHTML='';
+  const R = matrix.length, C = matrix[0].length;
+  padded.forEach((row,i)=>{
+    row.forEach((val,j)=>{
+      const isPad = i<padTop || i>=padTop+R || j<padLeft || j>=padLeft+C;
+      const d = document.createElement('div');
+      d.className = 'cell readonly'+(isPad?' padcell':'')+(val!==0 && isPad?' nonzero':'')+(val===0?' zeroval':'');
+      d.textContent = fmtVal(val);
+      grid.appendChild(d);
+    });
+  });
+}
+
+/* ---------- OP MODE ---------- */
+function onOpModeChange(){
+  const sel = document.querySelector('input[name="opMode"]:checked');
+  opMode = sel ? sel.value : 'both';
+  applyOpModeVisibility();
+}
+function applyOpModeVisibility(){
+  const showCorr = (opMode==='both' || opMode==='correlation');
+  const showConv = (opMode==='both' || opMode==='convolution');
+  document.getElementById('corrSection').classList.toggle('hidden', !showCorr);
+  document.getElementById('convSection').classList.toggle('hidden', !showConv);
+}
+
+/* ---------- STEP 4: SIMULATION ---------- */
+function startSimulation(){
+  if(padded.length===0){ alert('Please apply zero padding first.'); return; }
+  const R = matrix.length, C = matrix[0].length;
+  const kR = kernel.length, kC = kernel[0].length;
+
+  // Flipped mask (180°) used for convolution
+  const flipped = Array.from({length:kR},(_,i)=>Array.from({length:kC},(_,j)=>kernel[kR-1-i][kC-1-j]));
+
+  steps = [];
+  corrOut = Array.from({length:R},()=>Array(C).fill(null));
+  convOut = Array.from({length:R},()=>Array(C).fill(null));
+
+  for(let i=0;i<R;i++){
+    for(let j=0;j<C;j++){
+      let corrSum = 0, convSum = 0;
+      const corrTerms = [], convTerms = [];
+      for(let ki=0;ki<kR;ki++){
+        for(let kj=0;kj<kC;kj++){
+          const pv = padded[i+ki][j+kj];
+          const wCorr = kernel[ki][kj];
+          const wConv = flipped[ki][kj];
+          corrSum += wCorr * pv;
+          convSum += wConv * pv;
+          corrTerms.push({w:wCorr, v:pv});
+          convTerms.push({w:wConv, v:pv});
+        }
+      }
+      steps.push({r:i,c:j,corrSum,convSum,corrTerms,convTerms,flipped});
+    }
+  }
+  stepIdx = -1;
+  applyOpModeVisibility();
+  renderCorrGrid(); renderConvGrid(); renderSimGrid(null);
+  document.getElementById('stepInfo').classList.remove('hidden');
+  document.getElementById('btnNext').disabled = false;
+  document.getElementById('btnPlay').disabled = false;
+  document.getElementById('btnEnd').disabled = false;
+  document.getElementById('btnPrev').disabled = true;
+  updateProgress();
+  nextStep();
+}
+
+function nextStep(){
+  if(stepIdx >= steps.length-1) return;
+  stepIdx++;
+  applyStep(stepIdx);
+  document.getElementById('btnPrev').disabled = stepIdx<=0;
+  if(stepIdx===steps.length-1){
+    document.getElementById('btnNext').disabled = true;
+    stopAutoPlay();
+  }
+  updateProgress();
+}
+function prevStep(){
+  if(stepIdx<=0) return;
+  stepIdx--;
+  rebuildOutputsUpTo(stepIdx);
+  applyStep(stepIdx);
+  document.getElementById('btnNext').disabled = false;
+  document.getElementById('btnPrev').disabled = stepIdx<=0;
+  updateProgress();
+}
+function jumpToEnd(){
+  stopAutoPlay();
+  for(let s=0;s<steps.length;s++){ stepIdx=s; setOutputCell(s);}
+  stepIdx = steps.length-1;
+  applyStep(stepIdx, true);
+  document.getElementById('btnNext').disabled = true;
+  document.getElementById('btnPrev').disabled = false;
+  updateProgress();
+}
+function rebuildOutputsUpTo(idx){
+  const R = matrix.length, C = matrix[0].length;
+  corrOut = Array.from({length:R},()=>Array(C).fill(null));
+  convOut = Array.from({length:R},()=>Array(C).fill(null));
+  for(let s=0;s<idx;s++) setOutputCell(s);
+  renderCorrGrid(); renderConvGrid();
+}
+function setOutputCell(s){
+  const st = steps[s];
+  corrOut[st.r][st.c] = st.corrSum;
+  convOut[st.r][st.c] = st.convSum;
+}
+function applyStep(idx){
+  const st = steps[idx];
+  setOutputCell(idx);
+  renderSimGrid(st);
+  renderCorrGrid(); renderConvGrid();
+  renderMaskDisplay(st);
+  document.getElementById('stepCounter').textContent =
+    `${idx+1} / ${steps.length}  (output row ${st.r}, col ${st.c})`;
+
+  const dec = clampInt('decimals',0,4);
+  const corrMath = st.corrTerms
+    .filter(t => t.w !== 0)
+    .map(t => `(${fmtVal(t.w)}×${fmtVal(t.v)})`)
+    .join(' + ') || '0';
+  const convMath = st.convTerms
+    .filter(t => t.w !== 0)
+    .map(t => `(${fmtVal(t.w)}×${fmtVal(t.v)})`)
+    .join(' + ') || '0';
+
+  let lines = '';
+  if(opMode==='both' || opMode==='correlation'){
+    lines += `<b style="color:var(--corr)">Correlation:</b> mask applied as-is → result = <b style="color:var(--corr)">${st.corrSum.toFixed(dec)}</b>
+              <span class="math">${corrMath} = ${st.corrSum.toFixed(dec)}</span>`;
+  }
+  if(opMode==='both' || opMode==='convolution'){
+    lines += `<br><b style="color:var(--conv)">Convolution:</b> mask flipped 180° → result = <b style="color:var(--conv)">${st.convSum.toFixed(dec)}</b>
+              <span class="math">${convMath} = ${st.convSum.toFixed(dec)}</span>`;
+  }
+
+  document.getElementById('readout').innerHTML =
+    `Window origin aligned at padded position <b>(${st.r+kOriginR}, ${st.c+kOriginC})</b> → output cell <b>(${st.r}, ${st.c})</b>.<br>${lines}`;
+}
+function autoPlay(){
+  if(playTimer){ stopAutoPlay(); return; }
+  document.getElementById('btnPlay').textContent = '⏸ Pause';
+  playTimer = setInterval(()=>{
+    if(stepIdx>=steps.length-1){ stopAutoPlay(); return; }
+    nextStep();
+  },700);
+}
+function stopAutoPlay(){
+  if(playTimer){ clearInterval(playTimer); playTimer=null; }
+  document.getElementById('btnPlay').textContent = '⏵ Auto Play';
+}
+function updateProgress(){
+  const pct = steps.length? Math.round(((stepIdx+1)/steps.length)*100) : 0;
+  document.getElementById('progressBar').style.width = pct+'%';
+}
+
+function renderSimGrid(currentStep){
+  const grid = document.getElementById('simGrid');
+  grid.style.gridTemplateColumns = `repeat(${padded[0].length}, 44px)`;
+  grid.innerHTML='';
+  const R = matrix.length, C = matrix[0].length;
+  const kR = kernel.length, kC = kernel[0].length;
+  padded.forEach((row,i)=>{
+    row.forEach((val,j)=>{
+      const isPad = i<padTop || i>=padTop+R || j<padLeft || j>=padLeft+C;
+      const d = document.createElement('div');
+      let cls = 'cell readonly'+(isPad?' padcell':'')+(val===0?' zeroval':'');
+      if(currentStep){
+        const inWindow = i>=currentStep.r && i<currentStep.r+kR && j>=currentStep.c && j<currentStep.c+kC;
+        if(inWindow){
+          cls += ' window-hl';
+          const ki=i-currentStep.r, kj=j-currentStep.c;
+          if(kernel[ki][kj]!==0) cls += ' kernel-active';
+          if(ki===kOriginR && kj===kOriginC) cls += ' origin-hl';
+        }
+      }
+      d.className = cls;
+      d.textContent = fmtVal(val);
+      grid.appendChild(d);
+    });
+  });
+}
+function renderMaskDisplay(st){
+  const wrap = document.getElementById('maskDisplay');
+  if(!st){ wrap.innerHTML=''; return; }
+  const kR = kernel.length, kC = kernel[0].length;
+  const showCorr = (opMode==='both' || opMode==='correlation');
+  const showConv = (opMode==='both' || opMode==='convolution');
+  let html = '<div style="display:flex; gap:22px; flex-wrap:wrap;">';
+  if(showCorr){
+    html += `<div><div style="font-size:.78rem; color:var(--corr); margin-bottom:4px;">Mask (correlation — as-is)</div><div class="mask-preview"><div class="grid" style="grid-template-columns:repeat(${kC},32px);">`;
+    for(let i=0;i<kR;i++) for(let j=0;j<kC;j++){
+      const isOrigin = (i===kOriginR && j===kOriginC);
+      html += `<div class="cell${isOrigin?' origin':''}${kernel[i][j]===0?' zeroval':''}" style="width:32px;height:32px;font-size:.72rem;">${fmtVal(kernel[i][j])}</div>`;
+    }
+    html += `</div></div></div>`;
+  }
+  if(showConv){
+    // For convolution display, the flipped mask origin is at (kR-1-kOriginR, kC-1-kOriginC)
+    const foR = kR-1-kOriginR, foC = kC-1-kOriginC;
+    html += `<div><div style="font-size:.78rem; color:var(--conv); margin-bottom:4px;">Mask (convolution — flipped 180°)</div><div class="mask-preview"><div class="grid" style="grid-template-columns:repeat(${kC},32px);">`;
+    for(let i=0;i<kR;i++) for(let j=0;j<kC;j++){
+      const isOrigin = (i===foR && j===foC);
+      const v = st.flipped[i][j];
+      html += `<div class="cell${isOrigin?' origin':''}${v===0?' zeroval':''}" style="width:32px;height:32px;font-size:.72rem;">${fmtVal(v)}</div>`;
+    }
+    html += `</div></div></div>`;
+  }
+  html += '</div>';
+  wrap.innerHTML = html;
+}
+function renderCorrGrid(){ renderOutGrid('corrGrid', corrOut, 'corr'); }
+function renderConvGrid(){ renderOutGrid('convGrid', convOut, 'conv'); }
+function renderOutGrid(id, data, kind){
+  const grid = document.getElementById(id);
+  grid.style.gridTemplateColumns = `repeat(${matrix[0].length}, 52px)`;
+  grid.innerHTML='';
+  const dec = clampInt('decimals',0,4);
+  data.forEach(row=>{
+    row.forEach(val=>{
+      const d = document.createElement('div');
+      d.className = 'cell out-cell readonly';
+      if(val===null){ d.textContent=''; d.style.opacity=.25; }
+      else{
+        d.textContent = Number(val).toFixed(dec);
+        d.style.background = kind==='corr' ? 'var(--corr)' : 'var(--conv)';
+        d.style.color = '#1a0508';
+      }
+      grid.appendChild(d);
+    });
+  });
+}
+
+/* ---------- HELPERS ---------- */
+function fmtVal(v){
+  if(v===null || v===undefined || v==='') return '';
+  const n = Number(v);
+  if(isNaN(n)) return '0';
+  if(Number.isInteger(n)) return String(n);
+  // trim trailing zeros for compact display
+  return parseFloat(n.toFixed(3)).toString();
+}
+function clampInt(id,min,max){
+  const el = document.getElementById(id);
+  let v = parseInt(el.value)||min;
+  v = Math.max(min,Math.min(max,v));
+  el.value = v;
+  return v;
+}
+function resetDownstream(){
+  padded = [];
+  document.getElementById('paddedGrid').innerHTML='';
+  document.getElementById('padLegend').innerHTML='';
+  resetSimButtons(false);
+}
+function resetSimButtons(padReady){
+  stopAutoPlay();
+  steps = []; stepIdx=-1;
+  document.getElementById('simGrid').innerHTML='';
+  document.getElementById('corrGrid').innerHTML='';
+  document.getElementById('convGrid').innerHTML='';
+  document.getElementById('maskDisplay').innerHTML='';
+  document.getElementById('stepInfo').classList.add('hidden');
+  document.getElementById('progressBar').style.width='0%';
+  document.getElementById('btnNext').disabled = true;
+  document.getElementById('btnPrev').disabled = true;
+  document.getElementById('btnPlay').disabled = true;
+  document.getElementById('btnEnd').disabled = true;
+}
+
+/* ---------- INIT ---------- */
+generateMatrix();
+generateKernel();
+</script>
+</body>
+</html>

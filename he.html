@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Histogram Equalization Simulator</title>
+<style>
+  :root{
+    --bg:#0f1420; --panel:#161d2e; --panel2:#1c2540; --accent:#5eb3ff; --accent2:#ff8a5e;
+    --text:#e7ecf7; --muted:#8b96b3; --cell0:#1c2540; --pad:#2a3350;
+    --orig:#5eb3ff; --eq:#5eff9c; --cdf:#ffd166; --highlight:#ff6bd6;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; font-family:'Segoe UI',Roboto,Arial,sans-serif; background:linear-gradient(160deg,#0b0f1a,#141b2e);
+    color:var(--text); padding:24px; line-height:1.5;
+  }
+  h1{font-size:1.5rem; margin-bottom:4px;}
+  h2{font-size:1.05rem; color:var(--accent); border-bottom:1px solid #2a3350; padding-bottom:6px; margin-top:0;}
+  .subtitle{color:var(--muted); margin-top:0; margin-bottom:24px; font-size:.92rem;}
+  .container{max-width:1200px; margin:0 auto;}
+  .panel{
+    background:var(--panel); border:1px solid #26304a; border-radius:14px; padding:20px;
+    margin-bottom:20px; box-shadow:0 4px 18px rgba(0,0,0,.25);
+  }
+  .row{display:flex; flex-wrap:wrap; gap:20px; align-items:flex-start;}
+  label{font-size:.85rem; color:var(--muted); display:block; margin-bottom:4px;}
+  input[type=number]{
+    width:70px; padding:6px 8px; border-radius:8px; border:1px solid #33405f; background:#0f1424; color:var(--text);
+  }
+  .field{margin-bottom:10px;}
+  button{
+    background:linear-gradient(135deg,var(--accent),#3d84c9); border:none; color:#08111f; font-weight:600;
+    padding:9px 16px; border-radius:9px; cursor:pointer; font-size:.88rem; transition:transform .1s, opacity .15s;
+  }
+  button:hover{transform:translateY(-1px);}
+  button:disabled{opacity:.35; cursor:not-allowed; transform:none;}
+  button.secondary{background:linear-gradient(135deg,#3a4568,#293252); color:var(--text);}
+  button.ghost{background:transparent; border:1px solid #33405f; color:var(--text);}
+  .btnbar{display:flex; gap:10px; flex-wrap:wrap; margin-top:12px;}
+  .grid-wrap{overflow:auto; padding:6px;}
+  .grid{display:inline-grid; gap:3px; }
+  .cell{
+    width:44px; height:44px; display:flex; align-items:center; justify-content:center;
+    font-size:.85rem; font-weight:700; border-radius:6px; user-select:none;
+    background:var(--cell0); color:var(--text); border:1px solid #2c3654; transition:.12s;
+  }
+  .cell input{
+    width:100%; height:100%; text-align:center; background:transparent; border:none; color:inherit;
+    font-weight:700; font-size:.85rem; outline:none; padding:0; font-family:inherit;
+  }
+  .cell input:focus{background:rgba(94,179,255,.15);}
+  .cell.readonly{cursor:default;}
+  .gray-cell{color:#fff; text-shadow:0 1px 2px rgba(0,0,0,.6);}
+  .highlight-cell{outline:3px solid var(--highlight)!important; z-index:2; box-shadow:0 0 10px rgba(255,107,214,.6);}
+  .legend{display:flex; gap:18px; flex-wrap:wrap; font-size:.8rem; color:var(--muted); margin-top:10px;}
+  .swatch{display:inline-block; width:14px; height:14px; border-radius:4px; vertical-align:middle; margin-right:6px;}
+  .stepbox{
+    background:var(--panel2); border-radius:12px; padding:16px; margin-top:16px; border:1px solid #2a3350;
+  }
+  .stepbox h3{margin:0 0 10px 0; font-size:.95rem; color:var(--accent2);}
+  .readout{font-size:.85rem; color:var(--text); background:#0f1424; padding:10px 12px; border-radius:8px; border:1px solid #26304a;}
+  .readout b{color:var(--accent);}
+  .readout .math{font-family:'Consolas','Courier New',monospace; font-size:.82rem; color:var(--muted); display:block; margin-top:6px; word-break:break-word;}
+  .two-col{display:grid; grid-template-columns:1fr 1fr; gap:20px;}
+  @media(max-width:900px){.two-col{grid-template-columns:1fr;}}
+  .hidden{display:none!important;}
+  .stepnum{font-weight:700; color:var(--cdf);}
+  .progress{height:6px; background:#0f1424; border-radius:4px; overflow:hidden; margin:10px 0;}
+  .progress > div{height:100%; background:linear-gradient(90deg,var(--accent),var(--accent2)); width:0%; transition:.2s;}
+  .note{font-size:.78rem; color:var(--muted); margin-top:8px;}
+  .flex-center{display:flex; align-items:center; gap:10px;}
+  table.htable{
+    border-collapse:collapse; margin-top:12px; font-size:.85rem; background:#0f1424;
+    border:1px solid #26304a; border-radius:8px; overflow:hidden;
+  }
+  table.htable th, table.htable td{
+    padding:7px 11px; border-bottom:1px solid #26304a; border-right:1px solid #26304a;
+    text-align:center; font-family:'Consolas','Courier New',monospace;
+  }
+  table.htable th{background:#1a2238; color:var(--accent); font-weight:600; font-size:.78rem; letter-spacing:.03em;}
+  table.htable tr:last-child td{border-bottom:none;}
+  table.htable td:last-child, table.htable th:last-child{border-right:none;}
+  table.htable tr.hl td{background:rgba(255,107,214,.18); color:#fff;}
+  table.htable td.s-col{color:var(--eq); font-weight:700;}
+  .chart{
+    background:#0f1424; border:1px solid #26304a; border-radius:8px; padding:14px;
+    margin-top:12px;
+  }
+  .chart-title{font-size:.82rem; color:var(--muted); margin-bottom:8px;}
+  .bars{display:flex; align-items:flex-end; gap:6px; height:120px;}
+  .bar-wrap{flex:1; display:flex; flex-direction:column; align-items:center; min-width:0;}
+  .bar{width:100%; max-width:36px; border-radius:3px 3px 0 0; transition:height .3s, background .2s;}
+  .bar-label{font-size:.7rem; color:var(--muted); margin-top:4px; font-family:'Consolas','Courier New',monospace;}
+  .bar-count{font-size:.68rem; color:var(--muted); margin-bottom:2px; font-family:'Consolas','Courier New',monospace;}
+  .bar.hl{background:var(--highlight)!important;}
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>📊 Histogram Equalization Simulator</h1>
+  <p class="subtitle">Build a grayscale image, compute its histogram, derive the <b>CDF</b>, and watch the equalization mapping s<sub>k</sub> = round((L−1)·CDF(r<sub>k</sub>)) get applied pixel by pixel to flatten the intensity distribution.</p>
+
+  <!-- STEP 1: MATRIX -->
+  <div class="panel" id="panel-matrix">
+    <h2>Step 1 — Define the Grayscale Image</h2>
+    <div class="row">
+      <div class="field"><label>Rows</label><input type="number" id="rows" min="1" max="12" value="5"></div>
+      <div class="field"><label>Columns</label><input type="number" id="cols" min="1" max="12" value="5"></div>
+      <div class="field"><label>Gray levels (L)</label><input type="number" id="levels" min="2" max="256" value="8"></div>
+      <div class="field" style="align-self:flex-end;"><button onclick="generateMatrix()">Generate Matrix</button></div>
+      <div class="field" style="align-self:flex-end;"><button class="secondary" onclick="randomizeMatrix()">Randomize</button></div>
+      <div class="field" style="align-self:flex-end;"><button class="ghost" onclick="loadExample()">Example (Gonzalez)</button></div>
+    </div>
+    <p class="note">Click a cell to edit its intensity (integer in <code>[0, L−1]</code>). Press <b>Tab</b> to move to the next cell. Cells are shaded by brightness.</p>
+    <div class="grid-wrap"><div class="grid" id="matrixGrid"></div></div>
+  </div>
+
+  <!-- STEP 2: HISTOGRAM TABLE -->
+  <div class="panel" id="panel-hist">
+    <h2>Step 2 — Histogram, PDF, CDF &amp; Mapping Table</h2>
+    <p class="note">For each intensity <code>r<sub>k</sub></code>: count pixels <code>n<sub>k</sub></code>, probability <code>p<sub>k</sub> = n<sub>k</sub>/MN</code>, cumulative <code>CDF(r<sub>k</sub>) = Σ p<sub>j</sub></code>, and new intensity <code>s<sub>k</sub> = round((L−1)·CDF(r<sub>k</sub>))</code>.</p>
+    <div class="btnbar">
+      <button onclick="buildHistogram()">Compute Histogram &amp; Mapping</button>
+    </div>
+    <div id="histTableWrap"></div>
+    <div class="two-col" style="margin-top:14px;">
+      <div class="chart" id="chartOrigWrap">
+        <div class="chart-title" style="color:var(--orig)">Original histogram — n<sub>k</sub></div>
+        <div class="bars" id="chartOrig"></div>
+      </div>
+      <div class="chart" id="chartEqWrap">
+        <div class="chart-title" style="color:var(--eq)">Equalized histogram — n<sub>k</sub> after mapping</div>
+        <div class="bars" id="chartEq"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP 3: STEP-BY-STEP MAPPING -->
+  <div class="panel" id="panel-sim">
+    <h2>Step 3 — Apply the Mapping Pixel by Pixel</h2>
+    <div class="btnbar">
+      <button onclick="startSimulation()">▶ Start Simulation</button>
+      <button class="ghost" onclick="prevStep()" id="btnPrev" disabled>⟵ Prev</button>
+      <button class="ghost" onclick="nextStep()" id="btnNext" disabled>Next ⟶</button>
+      <button class="secondary" onclick="autoPlay()" id="btnPlay" disabled>⏵ Auto Play</button>
+      <button class="ghost" onclick="jumpToEnd()" id="btnEnd" disabled>⏭ Jump to End</button>
+    </div>
+    <div class="progress"><div id="progressBar"></div></div>
+
+    <div class="stepbox hidden" id="stepInfo">
+      <h3>Current Pixel — <span class="stepnum" id="stepCounter"></span></h3>
+      <div class="readout" id="readout"></div>
+    </div>
+
+    <div class="two-col" style="margin-top:18px;">
+      <div>
+        <h3 style="color:var(--orig)">Original Image</h3>
+        <div class="grid-wrap"><div class="grid" id="origGrid"></div></div>
+      </div>
+      <div>
+        <h3 style="color:var(--eq)">Equalized Image</h3>
+        <div class="grid-wrap"><div class="grid" id="eqGrid"></div></div>
+      </div>
+    </div>
+
+    <div class="legend" style="margin-top:16px;">
+      <span><span class="swatch" style="background:var(--orig)"></span>Original intensity</span>
+      <span><span class="swatch" style="background:var(--eq)"></span>Equalized intensity</span>
+      <span><span class="swatch" style="background:var(--highlight)"></span>Current pixel being mapped</span>
+      <span><span class="swatch" style="background:var(--cdf)"></span>CDF column</span>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ---------- STATE ---------- */
+let matrix = [];
+let L = 8;
+let histTable = [];   // array of {r, n, p, cdf, s}
+let mapping = {};     // r -> s
+let equalized = [];   // M×N of mapped intensities (null initially during stepping)
+let steps = [];       // list of {r,c, oldVal, newVal}
+let stepIdx = -1;
+let playTimer = null;
+
+/* ---------- STEP 1: MATRIX ---------- */
+function generateMatrix(){
+  const r = clampInt('rows',1,12), c = clampInt('cols',1,12);
+  L = clampInt('levels',2,256);
+  matrix = Array.from({length:r},()=>Array(c).fill(0));
+  renderMatrix();
+  resetDownstream();
+}
+function randomizeMatrix(){
+  if(matrix.length===0) generateMatrix();
+  L = clampInt('levels',2,256);
+  for(let i=0;i<matrix.length;i++)
+    for(let j=0;j<matrix[0].length;j++)
+      matrix[i][j] = Math.floor(Math.random()*L);
+  renderMatrix();
+  resetDownstream();
+}
+function loadExample(){
+  // Classic Gonzalez & Woods textbook example: 64×64 is impractical for a
+  // step-by-step demo, so we use a small 8×8 image with 8 gray levels (L=8)
+  // that follows a similar skewed distribution leaning toward dark pixels.
+  const ex = [
+    [0,0,0,1,1,1,2,2],
+    [0,0,1,1,2,2,3,3],
+    [0,1,1,2,2,3,3,4],
+    [1,1,2,2,3,3,4,4],
+    [1,2,2,3,3,4,4,5],
+    [2,2,3,3,4,4,5,5],
+    [2,3,3,4,4,5,5,6],
+    [3,3,4,4,5,5,6,7]
+  ];
+  matrix = ex.map(row=>row.slice());
+  L = 8;
+  document.getElementById('rows').value = 8;
+  document.getElementById('cols').value = 8;
+  document.getElementById('levels').value = 8;
+  renderMatrix();
+  resetDownstream();
+}
+function renderMatrix(){
+  const grid = document.getElementById('matrixGrid');
+  grid.style.gridTemplateColumns = `repeat(${matrix[0].length}, 44px)`;
+  grid.innerHTML='';
+  matrix.forEach((row,i)=>{
+    row.forEach((val,j)=>{
+      const d = document.createElement('div');
+      d.className = 'cell gray-cell';
+      d.style.background = grayToColor(val);
+      const inp = document.createElement('input');
+      inp.type = 'text';
+      inp.value = val;
+      inp.addEventListener('change', ()=>{
+        let v = parseInt(inp.value, 10);
+        if(isNaN(v)) v = 0;
+        v = Math.max(0, Math.min(L-1, v));
+        matrix[i][j] = v;
+        inp.value = v;
+        d.style.background = grayToColor(v);
+        resetDownstream();
+      });
+      d.appendChild(inp);
+      grid.appendChild(d);
+    });
+  });
+}
+function grayToColor(v){
+  const t = Math.max(0, Math.min(1, v/(L-1||1)));
+  const g = Math.round(t*220 + 20);
+  return `rgb(${g},${g},${g})`;
+}
+
+/* ---------- STEP 2: HISTOGRAM ---------- */
+function buildHistogram(){
+  if(matrix.length===0){ alert('Generate a matrix first.'); return; }
+  L = clampInt('levels',2,256);
+  const MN = matrix.length * matrix[0].length;
+  const counts = new Array(L).fill(0);
+  for(let i=0;i<matrix.length;i++)
+    for(let j=0;j<matrix[0].length;j++){
+      const v = matrix[i][j];
+      if(v>=0 && v<L) counts[v]++;
+    }
+  histTable = [];
+  let cum = 0;
+  for(let k=0;k<L;k++){
+    const n = counts[k];
+    const p = n/MN;
+    cum += p;
+    const s = Math.round((L-1)*cum);
+    histTable.push({r:k, n, p, cdf:cum, s});
+  }
+  mapping = {};
+  histTable.forEach(row => { mapping[row.r] = row.s; });
+
+  // Equalized intensities for histogram chart
+  const eqCounts = new Array(L).fill(0);
+  for(let k=0;k<L;k++) eqCounts[ histTable[k].s ] += counts[k];
+
+  renderHistTable(-1);
+  renderBarChart('chartOrig', counts, 'var(--orig)');
+  renderBarChart('chartEq', eqCounts, 'var(--eq)');
+  resetSimButtons(true);
+}
+function renderHistTable(highlightR){
+  const wrap = document.getElementById('histTableWrap');
+  const MN = matrix.length * matrix[0].length;
+  let html = `<table class="htable">
+    <tr>
+      <th>k</th>
+      <th>r<sub>k</sub></th>
+      <th>n<sub>k</sub></th>
+      <th>p<sub>k</sub> = n<sub>k</sub>/${MN}</th>
+      <th style="color:var(--cdf)">CDF(r<sub>k</sub>)</th>
+      <th style="color:var(--eq)">s<sub>k</sub> = round((${L-1})·CDF)</th>
+    </tr>`;
+  histTable.forEach((row,k) => {
+    const hl = (row.r===highlightR) ? ' class="hl"' : '';
+    html += `<tr${hl}>
+      <td>${k}</td>
+      <td>${row.r}</td>
+      <td>${row.n}</td>
+      <td>${row.p.toFixed(3)}</td>
+      <td>${row.cdf.toFixed(3)}</td>
+      <td class="s-col">${row.s}</td>
+    </tr>`;
+  });
+  html += '</table>';
+  wrap.innerHTML = html;
+}
+function renderBarChart(id, counts, color, highlightIdx){
+  const wrap = document.getElementById(id);
+  wrap.innerHTML = '';
+  const maxC = Math.max(1, ...counts);
+  counts.forEach((c, k) => {
+    const bw = document.createElement('div');
+    bw.className = 'bar-wrap';
+    const cnt = document.createElement('div');
+    cnt.className = 'bar-count'; cnt.textContent = c;
+    const bar = document.createElement('div');
+    bar.className = 'bar' + (k===highlightIdx ? ' hl' : '');
+    bar.style.background = color;
+    bar.style.height = (c/maxC*90) + 'px';
+    const lab = document.createElement('div');
+    lab.className = 'bar-label'; lab.textContent = k;
+    bw.appendChild(cnt); bw.appendChild(bar); bw.appendChild(lab);
+    wrap.appendChild(bw);
+  });
+}
+
+/* ---------- STEP 3: SIMULATION ---------- */
+function startSimulation(){
+  if(histTable.length===0){ alert('Build the histogram first.'); return; }
+  const R = matrix.length, C = matrix[0].length;
+  steps = [];
+  for(let i=0;i<R;i++)
+    for(let j=0;j<C;j++){
+      const oldVal = matrix[i][j];
+      const newVal = mapping[oldVal];
+      steps.push({r:i, c:j, oldVal, newVal});
+    }
+  equalized = Array.from({length:R},()=>Array(C).fill(null));
+  stepIdx = -1;
+  renderOrigGrid(null); renderEqGrid();
+  document.getElementById('stepInfo').classList.remove('hidden');
+  document.getElementById('btnNext').disabled = false;
+  document.getElementById('btnPlay').disabled = false;
+  document.getElementById('btnEnd').disabled = false;
+  document.getElementById('btnPrev').disabled = true;
+  updateProgress();
+  nextStep();
+}
+function nextStep(){
+  if(stepIdx >= steps.length-1) return;
+  stepIdx++;
+  applyStep(stepIdx);
+  document.getElementById('btnPrev').disabled = stepIdx<=0;
+  if(stepIdx===steps.length-1){
+    document.getElementById('btnNext').disabled = true;
+    stopAutoPlay();
+  }
+  updateProgress();
+}
+function prevStep(){
+  if(stepIdx<=0) return;
+  stepIdx--;
+  rebuildUpTo(stepIdx);
+  applyStep(stepIdx);
+  document.getElementById('btnNext').disabled = false;
+  document.getElementById('btnPrev').disabled = stepIdx<=0;
+  updateProgress();
+}
+function jumpToEnd(){
+  stopAutoPlay();
+  for(let s=0;s<steps.length;s++){ stepIdx=s; setCell(s); }
+  stepIdx = steps.length-1;
+  applyStep(stepIdx);
+  document.getElementById('btnNext').disabled = true;
+  document.getElementById('btnPrev').disabled = false;
+  updateProgress();
+}
+function rebuildUpTo(idx){
+  const R = matrix.length, C = matrix[0].length;
+  equalized = Array.from({length:R},()=>Array(C).fill(null));
+  for(let s=0;s<idx;s++) setCell(s);
+}
+function setCell(s){
+  const st = steps[s];
+  equalized[st.r][st.c] = st.newVal;
+}
+function applyStep(idx){
+  const st = steps[idx];
+  setCell(idx);
+  renderOrigGrid(st); renderEqGrid(st);
+  renderHistTable(st.oldVal);
+  document.getElementById('stepCounter').textContent =
+    `${idx+1} / ${steps.length}  (row ${st.r}, col ${st.c})`;
+
+  const row = histTable.find(x => x.r===st.oldVal);
+  document.getElementById('readout').innerHTML =
+    `Pixel at <b>(${st.r}, ${st.c})</b> has intensity <b style="color:var(--orig)">r = ${st.oldVal}</b>.<br>
+     Look up the mapping: <b style="color:var(--cdf)">CDF(${st.oldVal}) = ${row.cdf.toFixed(3)}</b>, so
+     <b style="color:var(--eq)">s = round((${L-1}) × ${row.cdf.toFixed(3)}) = ${st.newVal}</b>.
+     <span class="math">equalized[${st.r}][${st.c}] = ${st.oldVal} → ${st.newVal}</span>`;
+}
+function autoPlay(){
+  if(playTimer){ stopAutoPlay(); return; }
+  document.getElementById('btnPlay').textContent = '⏸ Pause';
+  playTimer = setInterval(()=>{
+    if(stepIdx>=steps.length-1){ stopAutoPlay(); return; }
+    nextStep();
+  }, 450);
+}
+function stopAutoPlay(){
+  if(playTimer){ clearInterval(playTimer); playTimer=null; }
+  document.getElementById('btnPlay').textContent = '⏵ Auto Play';
+}
+function updateProgress(){
+  const pct = steps.length ? Math.round(((stepIdx+1)/steps.length)*100) : 0;
+  document.getElementById('progressBar').style.width = pct + '%';
+}
+
+function renderOrigGrid(currentStep){
+  const grid = document.getElementById('origGrid');
+  grid.style.gridTemplateColumns = `repeat(${matrix[0].length}, 44px)`;
+  grid.innerHTML='';
+  matrix.forEach((row,i)=>{
+    row.forEach((val,j)=>{
+      const d = document.createElement('div');
+      let cls = 'cell readonly gray-cell';
+      if(currentStep && currentStep.r===i && currentStep.c===j) cls += ' highlight-cell';
+      d.className = cls;
+      d.style.background = grayToColor(val);
+      d.textContent = val;
+      grid.appendChild(d);
+    });
+  });
+}
+function renderEqGrid(currentStep){
+  const grid = document.getElementById('eqGrid');
+  grid.style.gridTemplateColumns = `repeat(${matrix[0].length}, 44px)`;
+  grid.innerHTML='';
+  equalized.forEach((row,i)=>{
+    row.forEach((val,j)=>{
+      const d = document.createElement('div');
+      let cls = 'cell readonly gray-cell';
+      if(currentStep && currentStep.r===i && currentStep.c===j) cls += ' highlight-cell';
+      d.className = cls;
+      if(val===null){ d.style.background = '#0f1424'; d.style.color = 'var(--muted)'; d.textContent = '·'; }
+      else{ d.style.background = grayToColor(val); d.textContent = val; }
+      grid.appendChild(d);
+    });
+  });
+}
+
+/* ---------- HELPERS ---------- */
+function clampInt(id,min,max){
+  const el = document.getElementById(id);
+  let v = parseInt(el.value)||min;
+  v = Math.max(min,Math.min(max,v));
+  el.value = v;
+  return v;
+}
+function resetDownstream(){
+  histTable = []; mapping = {};
+  document.getElementById('histTableWrap').innerHTML = '';
+  document.getElementById('chartOrig').innerHTML = '';
+  document.getElementById('chartEq').innerHTML = '';
+  resetSimButtons(false);
+}
+function resetSimButtons(histReady){
+  stopAutoPlay();
+  steps = []; stepIdx = -1; equalized = [];
+  document.getElementById('origGrid').innerHTML = '';
+  document.getElementById('eqGrid').innerHTML = '';
+  document.getElementById('stepInfo').classList.add('hidden');
+  document.getElementById('progressBar').style.width = '0%';
+  document.getElementById('btnNext').disabled = true;
+  document.getElementById('btnPrev').disabled = true;
+  document.getElementById('btnPlay').disabled = true;
+  document.getElementById('btnEnd').disabled = true;
+}
+
+/* ---------- INIT ---------- */
+loadExample();
+</script>
+</body>
+</html>
