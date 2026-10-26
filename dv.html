@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>1st &amp; 2nd Order Derivative Simulator</title>
+<style>
+  :root{
+    --bg:#0f1420; --panel:#161d2e; --panel2:#1c2540; --accent:#5eb3ff; --accent2:#ff8a5e;
+    --text:#e7ecf7; --muted:#8b96b3; --cell0:#1c2540;
+    --f-color:#ffd166;    /* intensity profile */
+    --d1-color:#5eff9c;   /* 1st derivative */
+    --d2-color:#ff6bd6;   /* 2nd derivative */
+    --highlight:#ffbb33;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; font-family:'Segoe UI',Roboto,Arial,sans-serif; background:linear-gradient(160deg,#0b0f1a,#141b2e);
+    color:var(--text); padding:24px; line-height:1.5;
+  }
+  h1{font-size:1.5rem; margin-bottom:4px;}
+  h2{font-size:1.05rem; color:var(--accent); border-bottom:1px solid #2a3350; padding-bottom:6px; margin-top:0;}
+  .subtitle{color:var(--muted); margin-top:0; margin-bottom:24px; font-size:.92rem;}
+  .container{max-width:1200px; margin:0 auto;}
+  .panel{
+    background:var(--panel); border:1px solid #26304a; border-radius:14px; padding:20px;
+    margin-bottom:20px; box-shadow:0 4px 18px rgba(0,0,0,.25);
+  }
+  .row{display:flex; flex-wrap:wrap; gap:20px; align-items:flex-start;}
+  label{font-size:.85rem; color:var(--muted); display:block; margin-bottom:4px;}
+  input[type=text]{
+    padding:7px 10px; border-radius:8px; border:1px solid #33405f; background:#0f1424; color:var(--text);
+    font-family:'Consolas','Courier New',monospace; font-size:.9rem; min-width:420px;
+  }
+  .field{margin-bottom:10px;}
+  button{
+    background:linear-gradient(135deg,var(--accent),#3d84c9); border:none; color:#08111f; font-weight:600;
+    padding:9px 16px; border-radius:9px; cursor:pointer; font-size:.88rem; transition:transform .1s, opacity .15s;
+  }
+  button:hover{transform:translateY(-1px);}
+  button:disabled{opacity:.35; cursor:not-allowed; transform:none;}
+  button.secondary{background:linear-gradient(135deg,#3a4568,#293252); color:var(--text);}
+  button.ghost{background:transparent; border:1px solid #33405f; color:var(--text);}
+  .btnbar{display:flex; gap:10px; flex-wrap:wrap; margin-top:12px;}
+  .strip-wrap{overflow-x:auto; padding:6px 2px 10px;}
+  .strip-row{display:flex; gap:3px; align-items:stretch;}
+  .strip-row .label{
+    min-width:120px; max-width:120px; padding-right:10px; text-align:right;
+    font-size:.78rem; color:var(--muted); font-family:'Consolas','Courier New',monospace;
+    display:flex; align-items:center; justify-content:flex-end;
+  }
+  .scell{
+    width:40px; height:40px; display:flex; align-items:center; justify-content:center;
+    font-size:.85rem; font-weight:700; border-radius:6px; user-select:none;
+    background:var(--cell0); color:var(--text); border:1px solid #2c3654; transition:.12s;
+    position:relative;
+  }
+  .scell input{
+    width:100%; height:100%; text-align:center; background:transparent; border:none; color:inherit;
+    font-weight:700; font-size:.85rem; outline:none; padding:0; font-family:inherit;
+  }
+  .scell input:focus{background:rgba(94,179,255,.15);}
+  .scell.readonly{cursor:default;}
+  .scell.gray{color:#fff; text-shadow:0 1px 2px rgba(0,0,0,.6);}
+  .scell.d1{background:#1a2a24; color:var(--d1-color); border-color:#2d4a3a;}
+  .scell.d2{background:#2a1b26; color:var(--d2-color); border-color:#4a2a40;}
+  .scell.empty{background:#141a28; color:#394257; border:1px dashed #2a3350;}
+  .scell.hl{outline:3px solid var(--highlight)!important; box-shadow:0 0 10px rgba(255,187,51,.55); z-index:3;}
+  .scell.nb-prev{outline:3px dashed #5eb3ff!important; box-shadow:0 0 8px rgba(94,179,255,.45); z-index:2;}
+  .scell.nb-next{outline:3px dashed #c994ff!important; box-shadow:0 0 8px rgba(201,148,255,.45); z-index:2;}
+  .scell.pos-tick{background:transparent; border:none; color:var(--muted); font-size:.7rem; font-weight:500; height:18px;}
+  .legend{display:flex; gap:18px; flex-wrap:wrap; font-size:.8rem; color:var(--muted); margin-top:10px;}
+  .swatch{display:inline-block; width:14px; height:14px; border-radius:4px; vertical-align:middle; margin-right:6px;}
+  .stepbox{
+    background:var(--panel2); border-radius:12px; padding:16px; margin-top:16px; border:1px solid #2a3350;
+  }
+  .stepbox h3{margin:0 0 10px 0; font-size:.95rem; color:var(--accent2);}
+  .readout{font-size:.88rem; color:var(--text); background:#0f1424; padding:12px 14px; border-radius:8px; border:1px solid #26304a;}
+  .readout b{color:var(--accent);}
+  .readout .math{font-family:'Consolas','Courier New',monospace; font-size:.86rem; color:var(--muted); display:block; margin-top:6px; word-break:break-word;}
+  .hidden{display:none!important;}
+  .stepnum{font-weight:700; color:var(--highlight);}
+  .progress{height:6px; background:#0f1424; border-radius:4px; overflow:hidden; margin:10px 0;}
+  .progress > div{height:100%; background:linear-gradient(90deg,var(--accent),var(--accent2)); width:0%; transition:.2s;}
+  .note{font-size:.78rem; color:var(--muted); margin-top:8px;}
+  .flex-center{display:flex; align-items:center; gap:10px;}
+  .formula-box{
+    display:flex; gap:24px; flex-wrap:wrap; padding:12px 16px; background:#0f1424;
+    border:1px solid #26304a; border-radius:10px; margin-top:12px; font-family:'Consolas','Courier New',monospace; font-size:.9rem;
+  }
+  .formula-box .f1{color:var(--d1-color);}
+  .formula-box .f2{color:var(--d2-color);}
+  .chart-box{
+    background:#0f1424; border:1px solid #26304a; border-radius:10px; padding:14px; margin-top:12px;
+  }
+  .chart-title{font-size:.82rem; color:var(--muted); margin-bottom:8px;}
+  svg.chart{display:block; width:100%; height:280px;}
+  .chart-legend{display:flex; gap:18px; flex-wrap:wrap; font-size:.82rem; margin-top:8px;}
+  .chart-legend span{display:flex; align-items:center; gap:6px;}
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>📈 1st &amp; 2nd Order Derivative Simulator</h1>
+  <p class="subtitle">Enter a 1-D image strip (a scan line of intensities) and watch the forward 1st derivative and the central 2nd derivative get computed cell by cell, following the standard formulas used in digital image processing.</p>
+
+  <div class="formula-box">
+    <div><span class="f1">∂f/∂x</span> = f(x+1) − f(x)</div>
+    <div><span class="f2">∂²f/∂x²</span> = f(x+1) + f(x−1) − 2·f(x)</div>
+  </div>
+
+  <!-- STEP 1: STRIP INPUT -->
+  <div class="panel" id="panel-input">
+    <h2>Step 1 — Define the Image Strip</h2>
+    <div class="row">
+      <div class="field" style="flex:1;">
+        <label>Values (comma or space separated — or paste a digit string like <code>5543210006000131000777700</code>)</label>
+        <input type="text" id="stripInput" value="5 5 4 3 2 1 0 0 0 6 0 0 0 1 3 1 0 0 0 7 7 7 7 0 0">
+      </div>
+      <div class="field" style="align-self:flex-end;"><button onclick="buildStrip()">Load Strip</button></div>
+    </div>
+    <div class="btnbar">
+      <button class="ghost" onclick="loadPreset('userExample')">Example — Fig 4(b)</button>
+      <button class="ghost" onclick="loadPreset('slide1')">Example — Ramp + Step</button>
+      <button class="ghost" onclick="loadPreset('slide2')">Example — Isolated / Line / Step</button>
+      <button class="secondary" onclick="randomStrip()">Randomize</button>
+    </div>
+    <p class="note">Click any cell to edit its value and press <b>Tab</b> to move to the next. The row above the cells shows the position index <code>x</code> (0-based).</p>
+    <div class="strip-wrap" id="stripEditor"></div>
+  </div>
+
+  <!-- STEP 2: DERIVATIVE TABLE -->
+  <div class="panel" id="panel-table">
+    <h2>Step 2 — Compute the Derivatives</h2>
+    <p class="note">The 1st derivative at position <code>x</code> uses the forward difference <code>f(x+1) − f(x)</code>, so position <code>N−1</code> is undefined. The 2nd derivative uses the central second difference <code>f(x+1) + f(x−1) − 2·f(x)</code>, so positions <code>0</code> and <code>N−1</code> are undefined. Undefined cells are shown as dashed boxes.</p>
+    <div class="btnbar">
+      <button onclick="computeDerivatives()">Compute 1st &amp; 2nd Derivatives</button>
+    </div>
+    <div class="strip-wrap" id="derivTable" style="margin-top:14px;"></div>
+    <div class="legend">
+      <span><span class="swatch" style="background:#1c2540; border:1px solid #2c3654;"></span>f(x) intensity</span>
+      <span><span class="swatch" style="background:var(--d1-color)"></span>1st derivative</span>
+      <span><span class="swatch" style="background:var(--d2-color)"></span>2nd derivative</span>
+    </div>
+  </div>
+
+  <!-- STEP 3: STEP-BY-STEP -->
+  <div class="panel" id="panel-sim">
+    <h2>Step 3 — Walk Through Position by Position</h2>
+    <div class="btnbar">
+      <button onclick="startSimulation()">▶ Start Simulation</button>
+      <button class="ghost" onclick="prevStep()" id="btnPrev" disabled>⟵ Prev</button>
+      <button class="ghost" onclick="nextStep()" id="btnNext" disabled>Next ⟶</button>
+      <button class="secondary" onclick="autoPlay()" id="btnPlay" disabled>⏵ Auto Play</button>
+      <button class="ghost" onclick="jumpToEnd()" id="btnEnd" disabled>⏭ Jump to End</button>
+    </div>
+    <div class="progress"><div id="progressBar"></div></div>
+    <div class="stepbox hidden" id="stepInfo">
+      <h3>Current Position — <span class="stepnum" id="stepCounter"></span></h3>
+      <div class="readout" id="readout"></div>
+    </div>
+    <div class="strip-wrap" id="simTable" style="margin-top:14px;"></div>
+    <div class="legend" style="margin-top:4px;">
+      <span><span class="swatch" style="background:var(--highlight)"></span>Current position x</span>
+      <span><span class="swatch" style="background:#5eb3ff"></span>x−1 neighbour (used by 2nd derivative)</span>
+      <span><span class="swatch" style="background:#c994ff"></span>x+1 neighbour (used by both)</span>
+    </div>
+  </div>
+
+  <!-- STEP 4: GRAPH -->
+  <div class="panel" id="panel-graph">
+    <h2>Step 4 — Final Result Graph</h2>
+    <div class="chart-box">
+      <div class="chart-title">Gray-level profile, 1st derivative, and 2nd derivative vs. position x</div>
+      <svg class="chart" id="chart" viewBox="0 0 900 280" preserveAspectRatio="none"></svg>
+    </div>
+    <div class="chart-legend">
+      <span><span style="display:inline-block; width:14px; height:3px; background:var(--f-color);"></span> f(x) — gray-level profile (line)</span>
+      <span><span style="display:inline-block; width:14px; height:14px; border-radius:50%; background:var(--d1-color);"></span> 1st derivative (●)</span>
+      <span><span style="display:inline-block; width:14px; height:14px; background:var(--d2-color);"></span> 2nd derivative (▢)</span>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ---------- STATE ---------- */
+let strip = [];       // numeric array
+let d1 = [];          // array of {val:Number|null} length N
+let d2 = [];          // array of {val:Number|null} length N
+let steps = [];       // list of positions walked through 0..N-1
+let stepIdx = -1;
+let playTimer = null;
+
+/* ---------- STEP 1: STRIP ---------- */
+function parseStripText(txt){
+  txt = (txt || '').trim();
+  if(!txt) return [];
+  // If it contains any separator (comma/space/tab/semicolon), split on them.
+  if(/[\s,;]/.test(txt)){
+    return txt.split(/[\s,;]+/).map(t => {
+      const n = parseFloat(t);
+      return isNaN(n) ? 0 : n;
+    });
+  }
+  // Otherwise treat each character as a single-digit value (e.g. "5543210...")
+  return txt.split('').map(ch => {
+    const n = parseInt(ch, 10);
+    return isNaN(n) ? 0 : n;
+  });
+}
+function buildStrip(){
+  const txt = document.getElementById('stripInput').value;
+  strip = parseStripText(txt);
+  if(strip.length < 2){
+    alert('Please provide at least 2 values.');
+    return;
+  }
+  renderStripEditor();
+  resetDownstream();
+}
+function loadPreset(name){
+  const presets = {
+    userExample: '5 5 4 3 2 1 0 0 0 6 0 0 0 1 3 1 0 0 0 7 7 7 7 0 0',
+    slide1:      '6 6 6 6 5 4 3 2 1 1 1 1 1 1 1 6 6 6 6 6',
+    slide2:      '5 5 4 3 2 1 0 0 0 6 0 0 0 0 1 3 1 0 0 0 0 7 7 7 7'
+  };
+  if(!presets[name]) return;
+  document.getElementById('stripInput').value = presets[name];
+  buildStrip();
+}
+function randomStrip(){
+  const n = 20;
+  const arr = [];
+  for(let i=0;i<n;i++) arr.push(Math.floor(Math.random()*8));
+  document.getElementById('stripInput').value = arr.join(' ');
+  buildStrip();
+}
+function renderStripEditor(){
+  const wrap = document.getElementById('stripEditor');
+  wrap.innerHTML = '';
+
+  // Position-index row
+  const posRow = document.createElement('div');
+  posRow.className = 'strip-row';
+  const posLbl = document.createElement('div');
+  posLbl.className = 'label';
+  posLbl.textContent = 'x =';
+  posRow.appendChild(posLbl);
+  strip.forEach((_,i) => {
+    const t = document.createElement('div');
+    t.className = 'scell pos-tick';
+    t.textContent = i;
+    posRow.appendChild(t);
+  });
+  wrap.appendChild(posRow);
+
+  // Editable f(x) row
+  const fRow = document.createElement('div');
+  fRow.className = 'strip-row';
+  const fLbl = document.createElement('div');
+  fLbl.className = 'label';
+  fLbl.textContent = 'f(x) =';
+  fRow.appendChild(fLbl);
+  strip.forEach((val,i) => {
+    const d = document.createElement('div');
+    d.className = 'scell gray';
+    d.style.background = grayShade(val);
+    const inp = document.createElement('input');
+    inp.type = 'text';
+    inp.value = val;
+    inp.addEventListener('change', ()=>{
+      let v = parseFloat(inp.value);
+      if(isNaN(v)) v = 0;
+      strip[i] = v;
+      inp.value = v;
+      d.style.background = grayShade(v);
+      document.getElementById('stripInput').value = strip.join(' ');
+      resetDownstream();
+    });
+    d.appendChild(inp);
+    fRow.appendChild(d);
+  });
+  wrap.appendChild(fRow);
+}
+function grayShade(v){
+  const vals = strip.length ? strip : [v];
+  const mn = Math.min(...vals, v);
+  const mx = Math.max(...vals, v);
+  const range = (mx - mn) || 1;
+  const t = Math.max(0, Math.min(1, (v - mn)/range));
+  const g = Math.round(t*220 + 20);
+  return `rgb(${g},${g},${g})`;
+}
+
+/* ---------- STEP 2: COMPUTE ---------- */
+function computeDerivatives(){
+  if(strip.length < 2){ alert('Load a strip first.'); return; }
+  const N = strip.length;
+  d1 = new Array(N).fill(null).map(()=>({val:null}));
+  d2 = new Array(N).fill(null).map(()=>({val:null}));
+  for(let x=0; x<N; x++){
+    if(x < N-1) d1[x].val = strip[x+1] - strip[x];
+    if(x >= 1 && x <= N-2) d2[x].val = strip[x+1] + strip[x-1] - 2*strip[x];
+  }
+  renderDerivTable(-1, 'derivTable');
+  renderGraph();
+  resetSimButtons(true);
+}
+function renderDerivTable(highlight, containerId){
+  // `highlight` may be a plain number x (just outline that column)
+  // or an object { x, prevX, nextX } to also mark the neighbours.
+  if(typeof highlight === 'number') highlight = {x: highlight};
+  const h = highlight || {};
+  const hx     = (h.x     === undefined) ? -1 : h.x;
+  const prevX  = (h.prevX === undefined) ? -1 : h.prevX;
+  const nextX  = (h.nextX === undefined) ? -1 : h.nextX;
+  const extraClass = i => {
+    if(i === hx)    return ' hl';
+    if(i === prevX) return ' nb-prev';
+    if(i === nextX) return ' nb-next';
+    return '';
+  };
+
+  const wrap = document.getElementById(containerId);
+  wrap.innerHTML = '';
+
+  const makeRow = (labelTxt, cellBuilder) => {
+    const row = document.createElement('div');
+    row.className = 'strip-row';
+    const lbl = document.createElement('div');
+    lbl.className = 'label';
+    lbl.innerHTML = labelTxt;
+    row.appendChild(lbl);
+    strip.forEach((_,i) => row.appendChild(cellBuilder(i)));
+    wrap.appendChild(row);
+  };
+
+  // Position row
+  makeRow('x =', i => {
+    const t = document.createElement('div');
+    t.className = 'scell pos-tick' + extraClass(i);
+    t.textContent = i;
+    return t;
+  });
+  // f(x) row
+  makeRow('f(x) =', i => {
+    const d = document.createElement('div');
+    d.className = 'scell readonly gray' + extraClass(i);
+    d.style.background = grayShade(strip[i]);
+    d.textContent = strip[i];
+    return d;
+  });
+  // 1st derivative row (only self-outline, no neighbour marks here)
+  makeRow('∂f/∂x =', i => {
+    const d = document.createElement('div');
+    const v = d1[i] ? d1[i].val : null;
+    const hlOnly = (i===hx) ? ' hl' : '';
+    if(v===null){ d.className = 'scell empty' + hlOnly; d.textContent = '—'; }
+    else{ d.className = 'scell d1' + hlOnly; d.textContent = v; }
+    return d;
+  });
+  // 2nd derivative row (only self-outline, no neighbour marks here)
+  makeRow('∂²f/∂x² =', i => {
+    const d = document.createElement('div');
+    const v = d2[i] ? d2[i].val : null;
+    const hlOnly = (i===hx) ? ' hl' : '';
+    if(v===null){ d.className = 'scell empty' + hlOnly; d.textContent = '—'; }
+    else{ d.className = 'scell d2' + hlOnly; d.textContent = v; }
+    return d;
+  });
+}
+
+/* ---------- STEP 3: SIMULATION ---------- */
+let simD1 = [], simD2 = [];
+
+function startSimulation(){
+  if(strip.length < 2){ alert('Load a strip first.'); return; }
+  if(d1.length === 0) computeDerivatives();
+  const N = strip.length;
+  // Blank the simulation copies, then step through filling them in.
+  simD1 = new Array(N).fill(null).map(()=>({val:null}));
+  simD2 = new Array(N).fill(null).map(()=>({val:null}));
+  // Two phases: first sweep 1st derivative (right to left), then sweep 2nd.
+  steps = [];
+  for(let x=N-1; x>=0; x--) steps.push({phase:1, x});
+  for(let x=N-1; x>=0; x--) steps.push({phase:2, x});
+  stepIdx = -1;
+  renderDerivTable(-1, 'simTable');
+  document.getElementById('stepInfo').classList.remove('hidden');
+  document.getElementById('btnNext').disabled = false;
+  document.getElementById('btnPlay').disabled = false;
+  document.getElementById('btnEnd').disabled = false;
+  document.getElementById('btnPrev').disabled = true;
+  updateProgress();
+  nextStep();
+}
+
+function rebuildSimUpTo(idx){
+  const N = strip.length;
+  simD1 = new Array(N).fill(null).map(()=>({val:null}));
+  simD2 = new Array(N).fill(null).map(()=>({val:null}));
+  for(let s=0; s<=idx; s++){
+    const st = steps[s];
+    if(st.phase === 1 && st.x < N-1) simD1[st.x].val = strip[st.x+1] - strip[st.x];
+    if(st.phase === 2 && st.x >= 1 && st.x <= N-2) simD2[st.x].val = strip[st.x+1] + strip[st.x-1] - 2*strip[st.x];
+  }
+}
+
+function applyStep(idx){
+  const step = steps[idx];
+  const {phase, x} = step;
+  const N = strip.length;
+
+  // Fill in only the derivative for the current phase at position x.
+  if(phase === 1){
+    simD1[x].val = (x < N-1) ? (strip[x+1] - strip[x]) : null;
+  } else {
+    simD2[x].val = (x >= 1 && x <= N-2) ? (strip[x+1] + strip[x-1] - 2*strip[x]) : null;
+  }
+
+  // Figure out which neighbours get the dashed outlines.
+  let prevX = -1, nextX = -1;
+  if(phase === 1 && x < N-1) nextX = x + 1;
+  if(phase === 2 && x >= 1 && x <= N-2){ prevX = x - 1; nextX = x + 1; }
+
+  // Render using the sim arrays.
+  const tmpD1 = d1, tmpD2 = d2;
+  d1 = simD1; d2 = simD2;
+  renderDerivTable({x, prevX, nextX}, 'simTable');
+  d1 = tmpD1; d2 = tmpD2;
+
+  const N1 = N; // steps per phase
+  const stepInPhase = (phase === 1) ? (idx + 1) : (idx + 1 - N1);
+  const phaseLbl = (phase === 1)
+    ? `<span style="color:var(--d1-color)">Phase 1/2 — 1st derivative</span>`
+    : `<span style="color:var(--d2-color)">Phase 2/2 — 2nd derivative</span>`;
+  document.getElementById('stepCounter').innerHTML =
+    `${phaseLbl} · step ${stepInPhase} / ${N1}  (x = ${x})`;
+
+  const parts = [`Position <b>x = ${x}</b>, with <b>f(${x}) = ${strip[x]}</b>.`];
+  if(phase === 1){
+    if(x < N-1){
+      const v = simD1[x].val;
+      parts.push(`<b style="color:var(--d1-color)">∂f/∂x</b> = f(x+1) − f(x) → read the <span style="color:#c994ff">x+1 neighbour</span> at position ${x+1} (f = ${strip[x+1]}).`);
+      parts.push(`<b style="color:var(--d1-color)">∂f/∂x[${x}] = f(${x+1}) − f(${x}) = ${strip[x+1]} − ${strip[x]} = ${v}</b>`);
+    } else {
+      parts.push(`<b>Undefined</b> — no f(x+1) available at the right edge.`);
+    }
+  } else {
+    if(x >= 1 && x <= N-2){
+      const v = simD2[x].val;
+      parts.push(`<b style="color:var(--d2-color)">∂²f/∂x²</b> = f(x+1) + f(x−1) − 2·f(x) → read the <span style="color:#5eb3ff">x−1 neighbour</span> at position ${x-1} (f = ${strip[x-1]}) and the <span style="color:#c994ff">x+1 neighbour</span> at position ${x+1} (f = ${strip[x+1]}).`);
+      parts.push(`<b style="color:var(--d2-color)">∂²f/∂x²[${x}] = ${strip[x+1]} + ${strip[x-1]} − 2×${strip[x]} = ${v}</b>`);
+    } else {
+      parts.push(`<b>Undefined</b> — ${x===0?'no f(x−1)':'no f(x+1)'} available at the edge.`);
+    }
+  }
+
+  const d1Shown = simD1[x].val === null ? '—' : simD1[x].val;
+  const d2Shown = simD2[x].val === null ? '—' : simD2[x].val;
+  document.getElementById('readout').innerHTML =
+    parts.join('<br>') + `<span class="math">∂f/∂x[${x}] = ${d1Shown},  ∂²f/∂x²[${x}] = ${d2Shown}</span>`;
+}
+
+function nextStep(){
+  if(stepIdx >= steps.length-1) return;
+  stepIdx++;
+  applyStep(stepIdx);
+  document.getElementById('btnPrev').disabled = stepIdx<=0;
+  if(stepIdx===steps.length-1){
+    document.getElementById('btnNext').disabled = true;
+    stopAutoPlay();
+  }
+  updateProgress();
+}
+function prevStep(){
+  if(stepIdx<=0) return;
+  stepIdx--;
+  rebuildSimUpTo(stepIdx);
+  applyStep(stepIdx);
+  document.getElementById('btnNext').disabled = false;
+  document.getElementById('btnPrev').disabled = stepIdx<=0;
+  updateProgress();
+}
+function jumpToEnd(){
+  stopAutoPlay();
+  stepIdx = steps.length - 1;
+  rebuildSimUpTo(stepIdx);
+  applyStep(stepIdx);
+  document.getElementById('btnNext').disabled = true;
+  document.getElementById('btnPrev').disabled = false;
+  updateProgress();
+}
+function autoPlay(){
+  if(playTimer){ stopAutoPlay(); return; }
+  document.getElementById('btnPlay').textContent = '⏸ Pause';
+  playTimer = setInterval(()=>{
+    if(stepIdx>=steps.length-1){ stopAutoPlay(); return; }
+    nextStep();
+  }, 650);
+}
+function stopAutoPlay(){
+  if(playTimer){ clearInterval(playTimer); playTimer=null; }
+  document.getElementById('btnPlay').textContent = '⏵ Auto Play';
+}
+function updateProgress(){
+  const pct = steps.length ? Math.round(((stepIdx+1)/steps.length)*100) : 0;
+  document.getElementById('progressBar').style.width = pct + '%';
+}
+
+/* ---------- STEP 4: GRAPH ---------- */
+function renderGraph(){
+  const svg = document.getElementById('chart');
+  svg.innerHTML = '';
+  const N = strip.length;
+  if(N === 0) return;
+
+  const vb = {w:900, h:280};
+  const pad = {l:40, r:20, t:16, b:30};
+  const plotW = vb.w - pad.l - pad.r;
+  const plotH = vb.h - pad.t - pad.b;
+
+  // Gather all values to pick a y-range
+  const allVals = [...strip];
+  d1.forEach(e => { if(e && e.val!==null) allVals.push(e.val); });
+  d2.forEach(e => { if(e && e.val!==null) allVals.push(e.val); });
+  const yMin = Math.min(...allVals, 0);
+  const yMax = Math.max(...allVals, 1);
+  const yRange = (yMax - yMin) || 1;
+
+  const xScale = i => pad.l + (N<=1 ? plotW/2 : (i/(N-1))*plotW);
+  const yScale = v => pad.t + (1 - (v - yMin)/yRange) * plotH;
+
+  const nsSvg = 'http://www.w3.org/2000/svg';
+
+  // y-axis
+  const yAxis = document.createElementNS(nsSvg,'line');
+  yAxis.setAttribute('x1', pad.l); yAxis.setAttribute('x2', pad.l);
+  yAxis.setAttribute('y1', pad.t); yAxis.setAttribute('y2', pad.t + plotH);
+  yAxis.setAttribute('stroke', '#5c6b85');
+  svg.appendChild(yAxis);
+  // x-axis
+  const xAxis = document.createElementNS(nsSvg,'line');
+  xAxis.setAttribute('x1', pad.l); xAxis.setAttribute('x2', pad.l + plotW);
+  xAxis.setAttribute('y1', pad.t + plotH); xAxis.setAttribute('y2', pad.t + plotH);
+  xAxis.setAttribute('stroke', '#5c6b85');
+  svg.appendChild(xAxis);
+
+  // Horizontal gridline + tick label at every integer y value in the range.
+  // Adaptive stride so dense ranges (e.g. 0..255) do not overdraw.
+  const yStride = Math.max(1, Math.ceil(yRange / 20));
+  const yStart = Math.ceil(yMin / yStride) * yStride;
+  for(let v = yStart; v <= yMax; v += yStride){
+    const gy = yScale(v);
+    const gl = document.createElementNS(nsSvg,'line');
+    gl.setAttribute('x1', pad.l);          gl.setAttribute('x2', pad.l + plotW);
+    gl.setAttribute('y1', gy);             gl.setAttribute('y2', gy);
+    gl.setAttribute('stroke', v===0 ? '#4a5578' : '#1e2740');
+    if(v===0) gl.setAttribute('stroke-dasharray','3,3');
+    svg.appendChild(gl);
+    const t = document.createElementNS(nsSvg,'text');
+    t.setAttribute('x', pad.l - 6); t.setAttribute('y', gy + 4);
+    t.setAttribute('fill', v===0 ? '#c7d1e4' : '#8b96b3');
+    t.setAttribute('font-size','11');
+    t.setAttribute('text-anchor','end');
+    t.textContent = v;
+    svg.appendChild(t);
+  }
+  // x-tick labels (every few positions)
+  const tickStride = Math.max(1, Math.ceil(N/15));
+  for(let i=0; i<N; i+=tickStride){
+    const t = document.createElementNS(nsSvg,'text');
+    t.setAttribute('x', xScale(i)); t.setAttribute('y', pad.t + plotH + 16);
+    t.setAttribute('fill','#8b96b3'); t.setAttribute('font-size','11');
+    t.setAttribute('text-anchor','middle');
+    t.textContent = i;
+    svg.appendChild(t);
+  }
+
+  // f(x) line (yellow) + squares
+  let fPath = '';
+  strip.forEach((v,i) => {
+    fPath += (i===0 ? 'M':'L') + xScale(i) + ',' + yScale(v) + ' ';
+  });
+  const fLine = document.createElementNS(nsSvg,'path');
+  fLine.setAttribute('d', fPath);
+  fLine.setAttribute('stroke', 'var(--f-color)');
+  fLine.setAttribute('stroke-width', 2);
+  fLine.setAttribute('fill','none');
+  svg.appendChild(fLine);
+  strip.forEach((v,i) => {
+    const r = document.createElementNS(nsSvg,'rect');
+    r.setAttribute('x', xScale(i)-3); r.setAttribute('y', yScale(v)-3);
+    r.setAttribute('width',6); r.setAttribute('height',6);
+    r.setAttribute('fill', 'var(--f-color)');
+    svg.appendChild(r);
+  });
+
+  // 1st derivative — filled circles (per slide legend)
+  d1.forEach((e,i) => {
+    if(e===null || e.val===null) return;
+    const c = document.createElementNS(nsSvg,'circle');
+    c.setAttribute('cx', xScale(i)); c.setAttribute('cy', yScale(e.val));
+    c.setAttribute('r', 4);
+    c.setAttribute('fill', 'var(--d1-color)');
+    svg.appendChild(c);
+  });
+
+  // 2nd derivative — open squares (per slide legend)
+  d2.forEach((e,i) => {
+    if(e===null || e.val===null) return;
+    const r = document.createElementNS(nsSvg,'rect');
+    r.setAttribute('x', xScale(i)-5); r.setAttribute('y', yScale(e.val)-5);
+    r.setAttribute('width',10); r.setAttribute('height',10);
+    r.setAttribute('stroke', 'var(--d2-color)');
+    r.setAttribute('stroke-width', 1.5);
+    r.setAttribute('fill','none');
+    svg.appendChild(r);
+  });
+
+  // Dotted connector lines between consecutive defined derivative points to
+  // make the shape readable (matches the slide's styling).
+  const connect = (arr, color) => {
+    let path = ''; let started = false;
+    arr.forEach((e,i) => {
+      if(e===null || e.val===null){ started = false; return; }
+      path += (started?'L':'M') + xScale(i) + ',' + yScale(e.val) + ' ';
+      started = true;
+    });
+    if(!path) return;
+    const p = document.createElementNS(nsSvg,'path');
+    p.setAttribute('d', path);
+    p.setAttribute('stroke', color);
+    p.setAttribute('stroke-width', 1);
+    p.setAttribute('stroke-dasharray', '2,3');
+    p.setAttribute('fill','none');
+    svg.appendChild(p);
+  };
+  connect(d1, 'var(--d1-color)');
+  connect(d2, 'var(--d2-color)');
+}
+
+/* ---------- HELPERS ---------- */
+function resetDownstream(){
+  d1 = []; d2 = [];
+  document.getElementById('derivTable').innerHTML = '';
+  document.getElementById('chart').innerHTML = '';
+  resetSimButtons(false);
+}
+function resetSimButtons(derivReady){
+  stopAutoPlay();
+  steps = []; stepIdx = -1; simD1 = []; simD2 = [];
+  document.getElementById('simTable').innerHTML = '';
+  document.getElementById('stepInfo').classList.add('hidden');
+  document.getElementById('progressBar').style.width = '0%';
+  document.getElementById('btnNext').disabled = true;
+  document.getElementById('btnPrev').disabled = true;
+  document.getElementById('btnPlay').disabled = true;
+  document.getElementById('btnEnd').disabled = true;
+}
+
+/* ---------- INIT ---------- */
+buildStrip();
+computeDerivatives();
+</script>
+</body>
+</html>

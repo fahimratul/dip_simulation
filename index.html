@@ -17,6 +17,7 @@
     --c3:#8b6bff;   /* violet */
     --c4:#5eff9c;   /* mint   */
     --c5:#ffc94d;   /* amber  */
+    --c6:#ff6bd6;   /* pink   */
   }
 
   *{ box-sizing:border-box; }
@@ -140,6 +141,7 @@
   .card:nth-child(3){ --accent:var(--c3); }
   .card:nth-child(4){ --accent:var(--c4); }
   .card:nth-child(5){ --accent:var(--c5); }
+  .card:nth-child(6){ --accent:var(--c6); }
 
   .card:hover{
     border-color:color-mix(in srgb, var(--accent) 55%, transparent);
@@ -351,6 +353,32 @@
     <div class="body">
       <h2>Histogram Equalization</h2>
       <p class="desc">Flatten intensities via the CDF, pixel by pixel</p>
+      <div class="enter-row">ENTER<span class="bar"></span><span class="arrow">›</span></div>
+    </div>
+  </a>
+
+  <a class="card" href="dv.html" target="_blank" rel="noopener">
+    <span class="bracket tl"></span><span class="bracket tr"></span>
+    <span class="bracket bl"></span><span class="bracket br"></span>
+    <div class="scan"></div>
+    <div class="id-code"><span class="dot"></span>GATE // 06</div>
+    <div class="glyph">微</div>
+    <div class="body">
+      <h2>1st &amp; 2nd Derivative</h2>
+      <p class="desc">Edge detection on a 1-D image strip</p>
+      <div class="enter-row">ENTER<span class="bar"></span><span class="arrow">›</span></div>
+    </div>
+  </a>
+
+  <a class="card" href="lp.html" target="_blank" rel="noopener">
+    <span class="bracket tl"></span><span class="bracket tr"></span>
+    <span class="bracket bl"></span><span class="bracket br"></span>
+    <div class="scan"></div>
+    <div class="id-code"><span class="dot"></span>GATE // 07</div>
+    <div class="glyph">鋭</div>
+    <div class="body">
+      <h2>Laplacian Filter</h2>
+      <p class="desc">2nd-order derivative mask for sharpening &amp; edges</p>
       <div class="enter-row">ENTER<span class="bar"></span><span class="arrow">›</span></div>
     </div>
   </a>

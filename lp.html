@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Laplacian Filter Simulator</title>
+<style>
+  :root{
+    --bg:#0f1420; --panel:#161d2e; --panel2:#1c2540; --accent:#5eb3ff; --accent2:#ff8a5e;
+    --text:#e7ecf7; --muted:#8b96b3; --cell0:#1c2540; --pad:#2a3350;
+    --mask:#ffd166; --result:#ff6bd6; --pos:#5eff9c; --neg:#ff5e8a;
+    --win:#ffd166;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; font-family:'Segoe UI',Roboto,Arial,sans-serif;
+    background:linear-gradient(160deg,#0b0f1a,#141b2e);
+    color:var(--text); padding:24px; line-height:1.5;
+  }
+  h1{font-size:1.5rem; margin-bottom:4px;}
+  h2{font-size:1.05rem; color:var(--accent); border-bottom:1px solid #2a3350; padding-bottom:6px; margin-top:0;}
+  .subtitle{color:var(--muted); margin-top:0; margin-bottom:24px; font-size:.92rem;}
+  .container{max-width:1250px; margin:0 auto;}
+  .panel{
+    background:var(--panel); border:1px solid #26304a; border-radius:14px; padding:20px;
+    margin-bottom:20px; box-shadow:0 4px 18px rgba(0,0,0,.25);
+  }
+  .row{display:flex; flex-wrap:wrap; gap:20px; align-items:flex-start;}
+  label{font-size:.85rem; color:var(--muted); display:block; margin-bottom:4px;}
+  input[type=number]{
+    width:70px; padding:6px 8px; border-radius:8px; border:1px solid #33405f; background:#0f1424; color:var(--text);
+  }
+  .field{margin-bottom:10px;}
+  button{
+    background:linear-gradient(135deg,var(--accent),#3d84c9); border:none; color:#08111f; font-weight:600;
+    padding:9px 16px; border-radius:9px; cursor:pointer; font-size:.88rem; transition:transform .1s, opacity .15s;
+  }
+  button:hover{transform:translateY(-1px);}
+  button:disabled{opacity:.35; cursor:not-allowed; transform:none;}
+  button.secondary{background:linear-gradient(135deg,#3a4568,#293252); color:var(--text);}
+  button.ghost{background:transparent; border:1px solid #33405f; color:var(--text);}
+  button.mask-btn{
+    background:#0f1424; border:1px solid #33405f; color:var(--text); font-weight:600;
+    padding:10px 14px; font-size:.82rem; text-align:left;
+  }
+  button.mask-btn.active{background:linear-gradient(135deg,#2a3a68,#1c2540); border-color:var(--mask); color:var(--mask);}
+  .btnbar{display:flex; gap:10px; flex-wrap:wrap; margin-top:12px;}
+  .grid-wrap{overflow:auto; padding:6px;}
+  .grid{display:inline-grid; gap:3px; }
+  .cell{
+    width:48px; height:48px; display:flex; align-items:center; justify-content:center;
+    font-size:.85rem; font-weight:700; border-radius:6px; user-select:none;
+    background:var(--cell0); color:var(--text); border:1px solid #2c3654; transition:.12s;
+  }
+  .cell input{
+    width:100%; height:100%; text-align:center; background:transparent; border:none; color:inherit;
+    font-weight:700; font-size:.85rem; outline:none; padding:0; font-family:inherit;
+  }
+  .cell input:focus{background:rgba(94,179,255,.15);}
+  .cell.readonly{cursor:default;}
+  .cell.zeroval{color:var(--muted);}
+  .padcell{background:repeating-linear-gradient(45deg,#151b2c,#151b2c 5px,#1b2338 5px,#1b2338 10px); color:#4a5578; border:1px dashed #3a4568;}
+  .mcell{width:52px;height:52px;}
+  .mcell.center{box-shadow:inset 0 0 0 3px var(--accent2);}
+  .window-hl{outline:3px solid var(--win)!important; z-index:2;}
+  .kernel-active{background:rgba(255,209,102,.18)!important;}
+  .center-hl{outline:3px solid var(--accent2)!important; box-shadow:0 0 8px rgba(255,138,94,.7)!important;}
+  .legend{display:flex; gap:18px; flex-wrap:wrap; font-size:.8rem; color:var(--muted); margin-top:10px;}
+  .swatch{display:inline-block; width:14px; height:14px; border-radius:4px; vertical-align:middle; margin-right:6px;}
+  .stepbox{
+    background:var(--panel2); border-radius:12px; padding:16px; margin-top:16px; border:1px solid #2a3350;
+  }
+  .stepbox h3{margin:0 0 10px 0; font-size:.95rem; color:var(--accent2);}
+  .readout{font-size:.85rem; color:var(--text); background:#0f1424; padding:10px 12px; border-radius:8px; border:1px solid #26304a;}
+  .readout b{color:var(--accent);}
+  .readout .math{font-family:'Consolas','Courier New',monospace; font-size:.82rem; color:var(--muted); display:block; margin-top:6px; word-break:break-word;}
+  .two-col{display:grid; grid-template-columns:1fr 1fr; gap:20px;}
+  @media(max-width:900px){.two-col{grid-template-columns:1fr;}}
+  .out-cell{width:56px;height:48px; font-size:.82rem;}
+  .hidden{display:none!important;}
+  .stepnum{font-weight:700; color:var(--win);}
+  .progress{height:6px; background:#0f1424; border-radius:4px; overflow:hidden; margin:10px 0;}
+  .progress > div{height:100%; background:linear-gradient(90deg,var(--accent),var(--accent2)); width:0%; transition:.2s;}
+  .note{font-size:.78rem; color:var(--muted); margin-top:8px;}
+  .flex-center{display:flex; align-items:center; gap:10px;}
+  .formula-box{
+    display:flex; gap:24px; flex-wrap:wrap; padding:14px 18px; background:#0f1424;
+    border:1px solid #26304a; border-radius:10px; margin-bottom:18px;
+    font-family:'Consolas','Courier New',monospace; font-size:.9rem;
+  }
+  .formula-box .f1{color:var(--pos);}
+  .formula-box .f2{color:var(--result);}
+  .formula-box div{line-height:1.9;}
+  .mask-grid{
+    display:grid; grid-template-columns:repeat(2,1fr); gap:10px; margin-top:10px;
+  }
+  @media(max-width:720px){.mask-grid{grid-template-columns:1fr;}}
+  .mask-opt .mini{
+    display:inline-grid; grid-template-columns:repeat(3,22px); gap:1px;
+    background:#2a3350; padding:2px; border-radius:3px; margin-right:10px; vertical-align:middle;
+  }
+  .mask-opt .mini span{
+    background:#0f1424; width:22px; height:22px; display:flex; align-items:center; justify-content:center;
+    font-size:.65rem; color:var(--muted); font-family:'Consolas','Courier New',monospace;
+  }
+  .mask-opt .mini span.c{color:var(--accent2); font-weight:700;}
+  .enhance-row{
+    display:flex; align-items:center; gap:12px; margin-top:14px;
+    padding:10px 14px; background:#0f1424; border:1px solid #26304a; border-radius:10px;
+  }
+  .enhance-row input[type=checkbox]{width:18px; height:18px; cursor:pointer; accent-color:var(--mask);}
+  .enhance-row label{margin:0; color:var(--text); font-size:.9rem; cursor:pointer;}
+  .enhance-row .hint{font-size:.78rem; color:var(--muted); margin-left:auto;}
+  .mask-active-view{
+    display:flex; align-items:center; gap:16px; margin-top:14px; padding:12px 14px;
+    background:#0f1424; border:1px solid #26304a; border-radius:10px;
+  }
+  .mask-active-view .label{font-size:.82rem; color:var(--muted);}
+  .heatcell{
+    width:30px; height:30px; display:flex; align-items:center; justify-content:center;
+    font-size:.7rem; font-weight:700; border-radius:3px; color:#fff;
+    text-shadow:0 1px 2px rgba(0,0,0,.5);
+  }
+  .heat-wrap{display:flex; gap:28px; flex-wrap:wrap; margin-top:14px;}
+  .heat-block{display:flex; flex-direction:column; gap:6px;}
+  .heat-title{font-size:.82rem; color:var(--muted); font-weight:600;}
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Laplacian Filter Simulator</h1>
+  <p class="subtitle">Build a numeric image matrix, pick one of the Laplacian masks (standard or enhanced), zero-pad the border, then step through the convolution cell by cell to see how the second-order spatial derivative highlights intensity discontinuities.</p>
+
+  <div class="formula-box">
+    <div><span class="f1">&part;&sup2;f/&part;x&sup2;</span> = f(x+1,y) + f(x&minus;1,y) &minus; 2&middot;f(x,y)</div>
+    <div><span class="f1">&part;&sup2;f/&part;y&sup2;</span> = f(x,y+1) + f(x,y&minus;1) &minus; 2&middot;f(x,y)</div>
+    <div><span class="f2">&nabla;&sup2;f</span> = f(x+1,y) + f(x&minus;1,y) + f(x,y+1) + f(x,y&minus;1) &minus; 4&middot;f(x,y)</div>
+  </div>
+
+  <!-- STEP 1: MATRIX -->
+  <div class="panel" id="panel-matrix">
+    <h2>Step 1 &mdash; Define the Image Matrix</h2>
+    <div class="row">
+      <div class="field"><label>Rows</label><input type="number" id="rows" min="3" max="12" value="5"></div>
+      <div class="field"><label>Columns</label><input type="number" id="cols" min="3" max="12" value="5"></div>
+      <div class="field" style="align-self:flex-end;"><button onclick="generateMatrix()">Generate Matrix</button></div>
+      <div class="field" style="align-self:flex-end;"><button class="secondary" onclick="randomizeMatrix()">Randomize (0-9)</button></div>
+      <div class="field" style="align-self:flex-end;"><button class="ghost" onclick="clearMatrix()">Clear</button></div>
+    </div>
+    <div class="btnbar">
+      <span style="color:var(--muted); font-size:.8rem; align-self:center;">Presets from the slides:</span>
+      <button class="ghost" onclick="loadImagePreset('ex1')">3&times;3 Example (slide 9)</button>
+      <button class="ghost" onclick="loadImagePreset('ex2')">6&times;6 Region Image (slide 13)</button>
+      <button class="ghost" onclick="loadImagePreset('edge')">Vertical Edge (50 / 100)</button>
+    </div>
+    <p class="note">Click any cell to edit its value. The second-order derivative is strongest where neighbouring intensities differ sharply (edges).</p>
+    <div class="grid-wrap"><div class="grid" id="matrixGrid"></div></div>
+  </div>
+
+  <!-- STEP 2: MASK -->
+  <div class="panel" id="panel-mask">
+    <h2>Step 2 &mdash; Choose the Laplacian Mask</h2>
+    <p class="note" style="margin-top:0;">The four standard 3&times;3 Laplacian masks (slide 8). Pick a 4-neighbour or 8-neighbour (diagonals) variant, with the centre coefficient either negative or positive. The <b>Enhanced</b> rule (slide 10) increases the centre magnitude by 1 so the filter also keeps the original image energy.</p>
+    <div class="mask-grid" id="maskOptions"></div>
+    <div class="enhance-row">
+      <input type="checkbox" id="enhanceChk" onchange="updateActiveMask()">
+      <label for="enhanceChk">Enhanced Laplacian &mdash; add &plusmn;1 to the centre coefficient</label>
+      <span class="hint">e.g. &minus;4 &rarr; &minus;5, &minus;8 &rarr; &minus;9, +4 &rarr; +5</span>
+    </div>
+    <div class="mask-active-view">
+      <span class="label">Active mask:</span>
+      <div id="activeMaskDisplay"></div>
+      <span id="maskName" style="color:var(--mask); font-weight:700; font-size:.9rem;"></span>
+    </div>
+  </div>
+
+  <!-- STEP 3: PADDING -->
+  <div class="panel" id="panel-pad">
+    <h2>Step 3 &mdash; Zero Pad the Border</h2>
+    <p class="note">Because the mask is 3&times;3 with the centre as the anchor, a 1-pixel zero-pad on every side is needed so the window has a full neighbourhood at every image pixel. Padded cells are shown with a hatched pattern.</p>
+    <div class="btnbar">
+      <button onclick="applyPadding()">Apply Zero Padding</button>
+    </div>
+    <div class="grid-wrap" style="margin-top:14px;"><div class="grid" id="paddedGrid"></div></div>
+    <div class="legend" id="padLegend"></div>
+  </div>
+
+  <!-- STEP 4: SIMULATION -->
+  <div class="panel" id="panel-sim">
+    <h2>Step 4 &mdash; Step-by-Step Filter Application</h2>
+    <div class="btnbar">
+      <button onclick="startSimulation()">&#9654; Start Simulation</button>
+      <button class="ghost" onclick="prevStep()" id="btnPrev" disabled>&larr; Prev</button>
+      <button class="ghost" onclick="nextStep()" id="btnNext" disabled>Next &rarr;</button>
+      <button class="secondary" onclick="autoPlay()" id="btnPlay" disabled>&#9205; Auto Play</button>
+      <button class="ghost" onclick="jumpToEnd()" id="btnEnd" disabled>&#9197; Jump to End</button>
+    </div>
+    <div class="progress"><div id="progressBar"></div></div>
+
+    <div class="stepbox hidden" id="stepInfo">
+      <h3>Current Window Position &mdash; <span class="stepnum" id="stepCounter"></span></h3>
+      <div class="readout" id="readout"></div>
+    </div>
+
+    <div class="two-col" style="margin-top:18px;">
+      <div>
+        <h3 style="color:var(--win); margin-bottom:8px;">Padded Image (sliding window)</h3>
+        <div class="grid-wrap"><div class="grid" id="simGrid"></div></div>
+        <div id="maskDisplay" style="margin-top:16px;"></div>
+      </div>
+      <div>
+        <h3 style="color:var(--result); margin-bottom:8px;">Laplacian Output &nabla;&sup2;f</h3>
+        <p class="note" style="margin-top:0;">Each cell is the signed response. Positive values appear on one side of an edge, negative on the other &mdash; this is the zero-crossing property of 2nd-order derivatives.</p>
+        <div class="grid-wrap"><div class="grid" id="outGrid"></div></div>
+      </div>
+    </div>
+
+    <div class="heat-wrap" id="heatWrap"></div>
+
+    <div class="legend" style="margin-top:16px;">
+      <span><span class="swatch" style="background:var(--cell0); border:1px solid #2c3654;"></span>Image cell</span>
+      <span><span class="swatch" style="background:var(--pad)"></span>Zero-padded border</span>
+      <span><span class="swatch" style="background:var(--win)"></span>Current window</span>
+      <span><span class="swatch" style="background:var(--accent2)"></span>Mask centre (anchor)</span>
+      <span><span class="swatch" style="background:var(--result)"></span>Laplacian result</span>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ---------- MASK LIBRARY ---------- */
+const MASKS = {
+  negCenter4: { name:'4-neighbour (centre &minus;4)', k:[[0,1,0],[1,-4,1],[0,1,0]], centerSign:-1 },
+  negCenter8: { name:'8-neighbour (centre &minus;8)', k:[[1,1,1],[1,-8,1],[1,1,1]], centerSign:-1 },
+  posCenter4: { name:'4-neighbour (centre +4)',       k:[[0,-1,0],[-1,4,-1],[0,-1,0]], centerSign:+1 },
+  posCenter8: { name:'8-neighbour (centre +8)',       k:[[-1,-1,-1],[-1,8,-1],[-1,-1,-1]], centerSign:+1 }
+};
+
+/* ---------- STATE ---------- */
+let matrix = [];
+let activeMaskKey = 'negCenter4';
+let enhanced = false;
+let kernel = [];       // currently active 3x3 (with enhanced applied)
+const kOriginR = 1, kOriginC = 1;
+let padded = [];
+let padTop=1, padBottom=1, padLeft=1, padRight=1;
+let steps = [];
+let stepIdx = -1;
+let outData = [];
+let playTimer = null;
+
+/* ---------- STEP 1: MATRIX ---------- */
+function generateMatrix(){
+  const r = clampInt('rows',3,12), c = clampInt('cols',3,12);
+  matrix = Array.from({length:r},()=>Array(c).fill(0));
+  renderMatrix();
+  resetDownstream();
+}
+function randomizeMatrix(){
+  if(matrix.length===0) generateMatrix();
+  for(let i=0;i<matrix.length;i++)
+    for(let j=0;j<matrix[0].length;j++)
+      matrix[i][j] = Math.floor(Math.random()*10);
+  renderMatrix();
+  resetDownstream();
+}
+function clearMatrix(){
+  if(matrix.length===0) generateMatrix();
+  for(let i=0;i<matrix.length;i++)
+    for(let j=0;j<matrix[0].length;j++)
+      matrix[i][j] = 0;
+  renderMatrix();
+  resetDownstream();
+}
+function loadImagePreset(name){
+  const presets = {
+    ex1: [[8,5,4],[0,6,2],[1,3,7]],
+    ex2: [
+      [50,50,50,100,100,100],
+      [50,50,50,100,100,100],
+      [50,50,50,100,100,100],
+      [100,100,100,50,50,50],
+      [100,100,100,50,50,50],
+      [100,100,100,50,50,50]
+    ],
+    edge: [
+      [50,50,100,100],
+      [50,50,100,100],
+      [50,50,100,100],
+      [50,50,100,100]
+    ]
+  };
+  const p = presets[name]; if(!p) return;
+  matrix = p.map(r => r.slice());
+  document.getElementById('rows').value = matrix.length;
+  document.getElementById('cols').value = matrix[0].length;
+  renderMatrix();
+  resetDownstream();
+}
+function renderMatrix(){
+  const grid = document.getElementById('matrixGrid');
+  grid.style.gridTemplateColumns = `repeat(${matrix[0].length}, 48px)`;
+  grid.innerHTML='';
+  matrix.forEach((row,i)=>{
+    row.forEach((val,j)=>{
+      const d = document.createElement('div');
+      d.className = 'cell' + (val===0 ? ' zeroval' : '');
+      const inp = document.createElement('input');
+      inp.type = 'text';
+      inp.value = fmtVal(val);
+      inp.addEventListener('change', ()=>{
+        const v = parseFloat(inp.value);
+        matrix[i][j] = isNaN(v) ? 0 : v;
+        d.classList.toggle('zeroval', matrix[i][j]===0);
+        inp.value = fmtVal(matrix[i][j]);
+        resetDownstream();
+      });
+      d.appendChild(inp);
+      grid.appendChild(d);
+    });
+  });
+}
+
+/* ---------- STEP 2: MASK ---------- */
+function renderMaskOptions(){
+  const wrap = document.getElementById('maskOptions');
+  wrap.innerHTML = '';
+  Object.entries(MASKS).forEach(([key, m])=>{
+    const btn = document.createElement('button');
+    btn.className = 'mask-btn mask-opt' + (key===activeMaskKey ? ' active' : '');
+    btn.onclick = ()=>{ activeMaskKey = key; updateActiveMask(); };
+    let mini = '<span class="mini">';
+    for(let i=0;i<3;i++) for(let j=0;j<3;j++){
+      const isC = (i===1 && j===1);
+      mini += `<span class="${isC?'c':''}">${m.k[i][j]}</span>`;
+    }
+    mini += '</span>';
+    btn.innerHTML = mini + m.name;
+    wrap.appendChild(btn);
+  });
+}
+function updateActiveMask(){
+  enhanced = document.getElementById('enhanceChk').checked;
+  const m = MASKS[activeMaskKey];
+  kernel = m.k.map(row => row.slice());
+  if(enhanced){
+    // Increase magnitude of centre by 1 (sign preserving)
+    kernel[1][1] += m.centerSign; // e.g. -4 -> -5 (because centerSign is -1, add -1); +4 -> +5
+  }
+  renderMaskOptions();
+  renderActiveMaskDisplay();
+  resetDownstream();
+}
+function renderActiveMaskDisplay(){
+  const wrap = document.getElementById('activeMaskDisplay');
+  wrap.innerHTML = '';
+  const g = document.createElement('div');
+  g.className = 'grid';
+  g.style.gridTemplateColumns = 'repeat(3, 52px)';
+  for(let i=0;i<3;i++) for(let j=0;j<3;j++){
+    const d = document.createElement('div');
+    const isC = (i===1 && j===1);
+    d.className = 'cell mcell readonly' + (isC?' center':'') + (kernel[i][j]===0?' zeroval':'');
+    d.textContent = kernel[i][j];
+    g.appendChild(d);
+  }
+  wrap.appendChild(g);
+  const m = MASKS[activeMaskKey];
+  document.getElementById('maskName').innerHTML =
+    m.name + (enhanced ? ' &mdash; <span style="color:var(--pos)">Enhanced</span>' : '');
+}
+
+/* ---------- STEP 3: PADDING ---------- */
+function applyPadding(){
+  if(matrix.length===0 || kernel.length===0){
+    alert('Please generate the matrix and pick a mask first.');
+    return;
+  }
+  padTop = padBottom = padLeft = padRight = 1;
+  const R = matrix.length, C = matrix[0].length;
+  const newR = R+2, newC = C+2;
+  padded = Array.from({length:newR},()=>Array(newC).fill(0));
+  for(let i=0;i<R;i++)
+    for(let j=0;j<C;j++)
+      padded[i+1][j+1] = matrix[i][j];
+  renderPadded();
+  document.getElementById('padLegend').innerHTML =
+    `<span><span class="swatch" style="background:var(--cell0); border:1px solid #2c3654;"></span>Original image</span>
+     <span><span class="swatch" style="background:var(--pad)"></span>Zero padding (1 pixel on each side)</span>`;
+  resetSimButtons(true);
+}
+function renderPadded(){
+  const grid = document.getElementById('paddedGrid');
+  grid.style.gridTemplateColumns = `repeat(${padded[0].length}, 48px)`;
+  grid.innerHTML='';
+  const R = matrix.length, C = matrix[0].length;
+  padded.forEach((row,i)=>{
+    row.forEach((val,j)=>{
+      const isPad = i<padTop || i>=padTop+R || j<padLeft || j>=padLeft+C;
+      const d = document.createElement('div');
+      d.className = 'cell readonly'+(isPad?' padcell':'')+(val===0?' zeroval':'');
+      d.textContent = fmtVal(val);
+      grid.appendChild(d);
+    });
+  });
+}
+
+/* ---------- STEP 4: SIMULATION ---------- */
+function startSimulation(){
+  if(padded.length===0){ alert('Please apply zero padding first.'); return; }
+  const R = matrix.length, C = matrix[0].length;
+
+  steps = [];
+  outData = Array.from({length:R},()=>Array(C).fill(null));
+
+  for(let i=0;i<R;i++){
+    for(let j=0;j<C;j++){
+      let sum = 0;
+      const terms = [];
+      for(let ki=0; ki<3; ki++){
+        for(let kj=0; kj<3; kj++){
+          const pv = padded[i+ki][j+kj];
+          const w  = kernel[ki][kj];
+          sum += w * pv;
+          terms.push({w, v:pv});
+        }
+      }
+      steps.push({ r:i, c:j, sum, terms });
+    }
+  }
+  stepIdx = -1;
+  renderOutGrid(); renderSimGrid(null);
+  document.getElementById('stepInfo').classList.remove('hidden');
+  document.getElementById('btnNext').disabled = false;
+  document.getElementById('btnPlay').disabled = false;
+  document.getElementById('btnEnd').disabled = false;
+  document.getElementById('btnPrev').disabled = true;
+  document.getElementById('heatWrap').innerHTML = '';
+  updateProgress();
+  nextStep();
+}
+
+function nextStep(){
+  if(stepIdx >= steps.length-1) return;
+  stepIdx++;
+  applyStep(stepIdx);
+  document.getElementById('btnPrev').disabled = stepIdx<=0;
+  if(stepIdx===steps.length-1){
+    document.getElementById('btnNext').disabled = true;
+    stopAutoPlay();
+    renderHeatMaps();
+  }
+  updateProgress();
+}
+function prevStep(){
+  if(stepIdx<=0) return;
+  stepIdx--;
+  rebuildOutputsUpTo(stepIdx);
+  applyStep(stepIdx);
+  document.getElementById('btnNext').disabled = false;
+  document.getElementById('btnPrev').disabled = stepIdx<=0;
+  document.getElementById('heatWrap').innerHTML = '';
+  updateProgress();
+}
+function jumpToEnd(){
+  stopAutoPlay();
+  for(let s=0;s<steps.length;s++){ stepIdx=s; setOutputCell(s); }
+  stepIdx = steps.length-1;
+  applyStep(stepIdx);
+  document.getElementById('btnNext').disabled = true;
+  document.getElementById('btnPrev').disabled = false;
+  renderHeatMaps();
+  updateProgress();
+}
+function rebuildOutputsUpTo(idx){
+  const R = matrix.length, C = matrix[0].length;
+  outData = Array.from({length:R},()=>Array(C).fill(null));
+  for(let s=0; s<idx; s++) setOutputCell(s);
+  renderOutGrid();
+}
+function setOutputCell(s){
+  const st = steps[s];
+  outData[st.r][st.c] = st.sum;
+}
+function applyStep(idx){
+  const st = steps[idx];
+  setOutputCell(idx);
+  renderSimGrid(st);
+  renderOutGrid();
+  renderMaskDisplay(st);
+  document.getElementById('stepCounter').textContent =
+    `${idx+1} / ${steps.length}  (output row ${st.r}, col ${st.c})`;
+
+  // Build the arithmetic string: show only non-zero mask weights
+  const nonzero = st.terms.filter(t => t.w !== 0);
+  const math = nonzero.map(t => {
+    const w = t.w, v = t.v;
+    const wStr = (w<0 ? `(${w})` : `${w}`);
+    return `${wStr}&times;${v}`;
+  }).join(' + ');
+
+  const expanded = nonzero.map(t => (t.w * t.v)).join(' + ')
+                           .replace(/\+ -/g,'- ');
+
+  document.getElementById('readout').innerHTML =
+    `Window centre at padded position <b>(${st.r+1}, ${st.c+1})</b> &rarr; output cell <b>(${st.r}, ${st.c})</b>.<br>
+     <b style="color:var(--result)">&nabla;&sup2;f</b> = <b style="color:var(--result)">${st.sum}</b>
+     <span class="math">= ${math}<br>= ${expanded}<br>= ${st.sum}</span>`;
+}
+function autoPlay(){
+  if(playTimer){ stopAutoPlay(); return; }
+  document.getElementById('btnPlay').textContent = '&#10073;&#10073; Pause';
+  playTimer = setInterval(()=>{
+    if(stepIdx>=steps.length-1){ stopAutoPlay(); return; }
+    nextStep();
+  }, 650);
+}
+function stopAutoPlay(){
+  if(playTimer){ clearInterval(playTimer); playTimer=null; }
+  document.getElementById('btnPlay').innerHTML = '&#9205; Auto Play';
+}
+function updateProgress(){
+  const pct = steps.length ? Math.round(((stepIdx+1)/steps.length)*100) : 0;
+  document.getElementById('progressBar').style.width = pct+'%';
+}
+
+function renderSimGrid(currentStep){
+  const grid = document.getElementById('simGrid');
+  grid.style.gridTemplateColumns = `repeat(${padded[0].length}, 48px)`;
+  grid.innerHTML='';
+  const R = matrix.length, C = matrix[0].length;
+  padded.forEach((row,i)=>{
+    row.forEach((val,j)=>{
+      const isPad = i<padTop || i>=padTop+R || j<padLeft || j>=padLeft+C;
+      const d = document.createElement('div');
+      let cls = 'cell readonly'+(isPad?' padcell':'')+(val===0?' zeroval':'');
+      if(currentStep){
+        const inWin = i>=currentStep.r && i<currentStep.r+3 && j>=currentStep.c && j<currentStep.c+3;
+        if(inWin){
+          cls += ' window-hl';
+          const ki=i-currentStep.r, kj=j-currentStep.c;
+          if(kernel[ki][kj]!==0) cls += ' kernel-active';
+          if(ki===1 && kj===1) cls += ' center-hl';
+        }
+      }
+      d.className = cls;
+      d.textContent = fmtVal(val);
+      grid.appendChild(d);
+    });
+  });
+}
+function renderMaskDisplay(st){
+  const wrap = document.getElementById('maskDisplay');
+  if(!st){ wrap.innerHTML=''; return; }
+  let html = `<div style="font-size:.82rem; color:var(--mask); margin-bottom:6px;">Active mask (centred over the window)</div>`;
+  html += `<div class="grid" style="grid-template-columns:repeat(3,40px); gap:2px; display:inline-grid;">`;
+  for(let i=0;i<3;i++) for(let j=0;j<3;j++){
+    const isC = (i===1 && j===1);
+    html += `<div class="cell${isC?' center':''}${kernel[i][j]===0?' zeroval':''}" style="width:40px;height:40px;font-size:.78rem;">${kernel[i][j]}</div>`;
+  }
+  html += `</div>`;
+  wrap.innerHTML = html;
+}
+function renderOutGrid(){
+  const grid = document.getElementById('outGrid');
+  grid.style.gridTemplateColumns = `repeat(${matrix[0].length}, 56px)`;
+  grid.innerHTML='';
+  outData.forEach(row=>{
+    row.forEach(val=>{
+      const d = document.createElement('div');
+      d.className = 'cell out-cell readonly';
+      if(val===null){ d.textContent=''; d.style.opacity=.25; }
+      else{
+        d.textContent = fmtVal(val);
+        d.style.background = 'var(--result)';
+        d.style.color = '#1a0508';
+      }
+      grid.appendChild(d);
+    });
+  });
+}
+function renderHeatMaps(){
+  const wrap = document.getElementById('heatWrap');
+  wrap.innerHTML = '';
+  // Input heatmap (grayscale by intensity)
+  const inVals = matrix.flat();
+  const inMin = Math.min(...inVals), inMax = Math.max(...inVals);
+  const outVals = outData.flat().filter(v => v!==null);
+  const absMax = outVals.length ? Math.max(...outVals.map(v=>Math.abs(v))) : 1;
+
+  wrap.appendChild(buildHeat('Input image &mdash; grayscale', matrix, (v)=>{
+    const t = (inMax===inMin) ? 0.5 : (v-inMin)/(inMax-inMin);
+    const g = Math.round(t*230 + 15);
+    return `rgb(${g},${g},${g})`;
+  }, v => fmtVal(v)));
+
+  wrap.appendChild(buildHeat('Laplacian &nabla;&sup2;f &mdash; signed (red = negative, green = positive)', outData, (v)=>{
+    if(v===null) return '#1c2540';
+    const t = absMax===0 ? 0 : v/absMax;  // -1..1
+    if(t>=0){
+      const a = Math.min(1, t);
+      return `rgba(94,255,156,${0.15 + a*0.85})`;
+    } else {
+      const a = Math.min(1, -t);
+      return `rgba(255,94,138,${0.15 + a*0.85})`;
+    }
+  }, v => (v===null?'':fmtVal(v))));
+}
+function buildHeat(title, data, colorFn, textFn){
+  const block = document.createElement('div');
+  block.className = 'heat-block';
+  const t = document.createElement('div');
+  t.className = 'heat-title';
+  t.innerHTML = title;
+  block.appendChild(t);
+  const g = document.createElement('div');
+  g.className = 'grid';
+  g.style.gridTemplateColumns = `repeat(${data[0].length}, 30px)`;
+  g.style.gap = '2px';
+  data.forEach(row => row.forEach(v=>{
+    const c = document.createElement('div');
+    c.className = 'heatcell';
+    c.style.background = colorFn(v);
+    c.textContent = textFn(v);
+    g.appendChild(c);
+  }));
+  block.appendChild(g);
+  return block;
+}
+
+/* ---------- HELPERS ---------- */
+function fmtVal(v){
+  if(v===null || v===undefined || v==='') return '';
+  const n = Number(v);
+  if(isNaN(n)) return '0';
+  if(Number.isInteger(n)) return String(n);
+  return parseFloat(n.toFixed(3)).toString();
+}
+function clampInt(id,min,max){
+  const el = document.getElementById(id);
+  let v = parseInt(el.value)||min;
+  v = Math.max(min,Math.min(max,v));
+  el.value = v;
+  return v;
+}
+function resetDownstream(){
+  padded = [];
+  document.getElementById('paddedGrid').innerHTML='';
+  document.getElementById('padLegend').innerHTML='';
+  resetSimButtons(false);
+}
+function resetSimButtons(padReady){
+  stopAutoPlay();
+  steps = []; stepIdx=-1;
+  document.getElementById('simGrid').innerHTML='';
+  document.getElementById('outGrid').innerHTML='';
+  document.getElementById('maskDisplay').innerHTML='';
+  document.getElementById('heatWrap').innerHTML='';
+  document.getElementById('stepInfo').classList.add('hidden');
+  document.getElementById('progressBar').style.width='0%';
+  document.getElementById('btnNext').disabled = true;
+  document.getElementById('btnPrev').disabled = true;
+  document.getElementById('btnPlay').disabled = true;
+  document.getElementById('btnEnd').disabled = true;
+}
+
+/* ---------- INIT ---------- */
+generateMatrix();
+updateActiveMask();
+</script>
+</body>
+</html>
