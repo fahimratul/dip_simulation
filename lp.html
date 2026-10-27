@@ -175,10 +175,17 @@
 
   <!-- STEP 3: PADDING -->
   <div class="panel" id="panel-pad">
-    <h2>Step 3 &mdash; Zero Pad the Border</h2>
-    <p class="note">Because the mask is 3&times;3 with the centre as the anchor, a 1-pixel zero-pad on every side is needed so the window has a full neighbourhood at every image pixel. Padded cells are shown with a hatched pattern.</p>
-    <div class="btnbar">
-      <button onclick="applyPadding()">Apply Zero Padding</button>
+    <h2>Step 3 &mdash; Pad the Border</h2>
+    <p class="note">Because the mask is 3&times;3 with the centre as the anchor, a 1-pixel pad on every side is needed so the window has a full neighbourhood at every image pixel. Padded cells are shown with a hatched pattern. <b>Zero padding</b> fills the border with 0; <b>mirror padding</b> reflects the nearest image rows/columns, which avoids injecting a dark halo at the edges.</p>
+    <div class="btnbar" style="align-items:center;">
+      <span class="label">Padding mode:</span>
+      <label style="display:inline-flex; align-items:center; gap:6px; margin-right:12px;">
+        <input type="radio" name="padMode" value="zero" checked onchange="onPadModeChange()"> Zero
+      </label>
+      <label style="display:inline-flex; align-items:center; gap:6px; margin-right:12px;">
+        <input type="radio" name="padMode" value="mirror" onchange="onPadModeChange()"> Mirror
+      </label>
+      <button onclick="applyPadding()">Apply Padding</button>
     </div>
     <div class="grid-wrap" style="margin-top:14px;"><div class="grid" id="paddedGrid"></div></div>
     <div class="legend" id="padLegend"></div>
@@ -218,7 +225,7 @@
 
     <div class="legend" style="margin-top:16px;">
       <span><span class="swatch" style="background:var(--cell0); border:1px solid #2c3654;"></span>Image cell</span>
-      <span><span class="swatch" style="background:var(--pad)"></span>Zero-padded border</span>
+      <span><span class="swatch" style="background:var(--pad)"></span>Padded border</span>
       <span><span class="swatch" style="background:var(--win)"></span>Current window</span>
       <span><span class="swatch" style="background:var(--accent2)"></span>Mask centre (anchor)</span>
       <span><span class="swatch" style="background:var(--result)"></span>Laplacian result</span>
@@ -243,6 +250,7 @@ let kernel = [];       // currently active 3x3 (with enhanced applied)
 const kOriginR = 1, kOriginC = 1;
 let padded = [];
 let padTop=1, padBottom=1, padLeft=1, padRight=1;
+let padMode = 'zero';
 let steps = [];
 let stepIdx = -1;
 let outData = [];
@@ -370,11 +378,18 @@ function renderActiveMaskDisplay(){
 }
 
 /* ---------- STEP 3: PADDING ---------- */
+function onPadModeChange(){
+  const sel = document.querySelector('input[name="padMode"]:checked');
+  padMode = sel ? sel.value : 'zero';
+  if(padded.length){ applyPadding(); }
+}
 function applyPadding(){
   if(matrix.length===0 || kernel.length===0){
     alert('Please generate the matrix and pick a mask first.');
     return;
   }
+  const sel = document.querySelector('input[name="padMode"]:checked');
+  padMode = sel ? sel.value : 'zero';
   padTop = padBottom = padLeft = padRight = 1;
   const R = matrix.length, C = matrix[0].length;
   const newR = R+2, newC = C+2;
@@ -382,10 +397,28 @@ function applyPadding(){
   for(let i=0;i<R;i++)
     for(let j=0;j<C;j++)
       padded[i+1][j+1] = matrix[i][j];
+  if(padMode === 'mirror'){
+    // reflect edge rows/cols (1-pixel pad: mirrored value = nearest edge pixel)
+    for(let j=0;j<C;j++){
+      padded[0][j+1]      = matrix[0][j];
+      padded[R+1][j+1]    = matrix[R-1][j];
+    }
+    for(let i=0;i<R;i++){
+      padded[i+1][0]      = matrix[i][0];
+      padded[i+1][C+1]    = matrix[i][C-1];
+    }
+    padded[0][0]       = matrix[0][0];
+    padded[0][C+1]     = matrix[0][C-1];
+    padded[R+1][0]     = matrix[R-1][0];
+    padded[R+1][C+1]   = matrix[R-1][C-1];
+  }
   renderPadded();
+  const padDesc = padMode === 'mirror'
+    ? 'Mirror padding (edge pixels reflected, 1 pixel on each side)'
+    : 'Zero padding (1 pixel on each side)';
   document.getElementById('padLegend').innerHTML =
     `<span><span class="swatch" style="background:var(--cell0); border:1px solid #2c3654;"></span>Original image</span>
-     <span><span class="swatch" style="background:var(--pad)"></span>Zero padding (1 pixel on each side)</span>`;
+     <span><span class="swatch" style="background:var(--pad)"></span>${padDesc}</span>`;
   resetSimButtons(true);
 }
 function renderPadded(){
